@@ -6,6 +6,10 @@ An original 3D mobile open-world adventure project built with Godot 4.4.1.
 - Procedurally generated city blocks, roads, windows, a central plaza and an old clock tower.
 - Town trees with independently phased wind sway, animated leaf-cluster vertex motion, textured bark and layered foliage.
 - Procedural high-detail noise textures for terrain, asphalt, building plaster and plaza stone, with triplanar mapping for consistent surfaces.
+- Animated low-poly birds with individual flight orbits, body banking and continuously flapping wings over the central district.
+- Two detailed stone staircases with step collision, edge trims, handrails, raised landings and adjacent walkable ramps.
+- A purchasable travel cape at the Supply Shop; its subdivided cloth mesh ripples with wind, sprint speed and airborne movement, and can be equipped or stored.
+- Shoes are parented to the leg pivots so the feet follow the procedural walk/run cycle.
 - Town street lamps and a furnished starter townhouse interior.
 - Working entrance and exit portals between the city and the townhouse.
 - Dynamic directional sunlight and a running world clock.
@@ -42,7 +46,7 @@ An original 3D mobile open-world adventure project built with Godot 4.4.1.
 The project uses Godot's mobile GL Compatibility renderer. Android export configuration, device testing and APK packaging are still pending. No APK is produced by the current validation workflow.
 
 ## Remaining major milestones
-1. Refine parkour with ledge grabs, climb-up animations, wall traversal and responsive touch buttons.
+1. Replace procedural character and bird geometry with authored high-detail models, rigged animation and original material/texture assets; add terrain elevation and more connected stair/ramp routes.
 2. Expand interiors into multiple enterable buildings with rooms, stairs and interactive furniture.
 3. Improve NPC routines, dialogue, schedules, reputation and city reactions.
 4. Complete jobs, shops, trading, crafting, inventory UI and balanced economy.
