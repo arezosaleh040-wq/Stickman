@@ -53,7 +53,7 @@ func interact() -> String:
 
 func _choose_destination() -> void:
 	var angle := randf() * TAU
-	var distance := randf_range(2.0, wander_radius)
+	var distance := randf_range(0.35, maxf(0.4, wander_radius))
 	target_position = home_position + Vector3(cos(angle) * distance, 0, sin(angle) * distance)
 	wait_time = randf_range(1.0, 3.0)
 
