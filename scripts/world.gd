@@ -7,6 +7,7 @@ var sun: DirectionalLight3D
 var clock_label: Label
 var cloud_layers: Array[Node3D] = []
 var wind_trees: Array[Node3D] = []
+var flying_birds: Array[Dictionary] = []
 var terrain_material: StandardMaterial3D
 var asphalt_material: StandardMaterial3D
 var bark_material: StandardMaterial3D
@@ -20,7 +21,9 @@ func _ready() -> void:
 	_create_cloud_layers()
 	_create_ground()
 	_create_roads()
+	_create_walkable_staircases()
 	_create_city_decor()
+	_create_flying_birds()
 	_create_town()
 	_create_landmarks()
 	_create_city_services()
@@ -41,6 +44,19 @@ func _process(delta: float) -> void:
 		var strength := float(tree.get_meta("wind_strength", 1.0))
 		tree.rotation.z = sin(wind_time * 0.72 + phase) * 0.012 * strength
 		tree.rotation.x = cos(wind_time * 0.57 + phase * 1.4) * 0.008 * strength
+	for bird_data in flying_birds:
+		var bird: Node3D = bird_data["root"]
+		var phase := float(bird_data["phase"])
+		var orbit_time := wind_time * float(bird_data["speed"]) + phase
+		var radius := float(bird_data["radius"])
+		var center: Vector3 = bird_data["center"]
+		bird.position = center + Vector3(cos(orbit_time) * radius, sin(orbit_time * 1.8 + phase) * 0.72, sin(orbit_time) * radius * 0.68)
+		var flight_direction := Vector3(-sin(orbit_time), cos(orbit_time * 1.8 + phase) * 0.12, cos(orbit_time) * 0.68).normalized()
+		bird.look_at(bird.position + flight_direction, Vector3.UP)
+		bird.rotation.z += sin(orbit_time) * 0.045
+		var flap := sin(wind_time * 10.5 + phase * 2.0) * 0.62
+		(bird_data["left_wing"] as Node3D).rotation.z = -flap
+		(bird_data["right_wing"] as Node3D).rotation.z = flap
 	if sun:
 		var angle := day_clock * TAU
 		sun.rotation_degrees.x = -rad_to_deg(angle) + 90.0
@@ -483,6 +499,193 @@ func _create_city_decor() -> void:
 			lantern.position = lamp.position + Vector3.UP * 2.0
 			lantern.material_override = _mat(Color(0.95, 0.72, 0.36), 0.22)
 			add_child(lantern)
+
+
+func _create_flying_birds() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 93417
+	var feather_material := _mat(Color(0.105, 0.12, 0.14), 0.82)
+	var belly_material := _mat(Color(0.42, 0.39, 0.34), 0.9)
+	var beak_material := _mat(Color(0.78, 0.48, 0.16), 0.68)
+	for index in range(7):
+		var bird := Node3D.new()
+		bird.name = "SkyBird_%02d" % index
+		add_child(bird)
+		var body := MeshInstance3D.new()
+		var body_mesh := SphereMesh.new()
+		body_mesh.radius = 0.13
+		body_mesh.height = 0.22
+		body.mesh = body_mesh
+		body.scale = Vector3(0.72, 0.72, 1.55)
+		body.material_override = feather_material
+		bird.add_child(body)
+		var belly := MeshInstance3D.new()
+		var belly_mesh := SphereMesh.new()
+		belly_mesh.radius = 0.105
+		belly_mesh.height = 0.15
+		belly.mesh = belly_mesh
+		belly.position = Vector3(0, -0.055, -0.005)
+		belly.scale = Vector3(0.7, 0.44, 1.2)
+		belly.material_override = belly_material
+		bird.add_child(belly)
+		var head := MeshInstance3D.new()
+		var head_mesh := SphereMesh.new()
+		head_mesh.radius = 0.085
+		head_mesh.height = 0.16
+		head.mesh = head_mesh
+		head.position = Vector3(0, 0.035, -0.145)
+		head.material_override = feather_material
+		bird.add_child(head)
+		var beak := MeshInstance3D.new()
+		var beak_mesh := ConeMesh.new()
+		beak_mesh.top_radius = 0.0
+		beak_mesh.bottom_radius = 0.035
+		beak_mesh.height = 0.12
+		beak.mesh = beak_mesh
+		beak.position = Vector3(0, 0.015, -0.245)
+		beak.rotation.x = -PI * 0.5
+		beak.material_override = beak_material
+		bird.add_child(beak)
+		var left_wing := Node3D.new()
+		left_wing.position = Vector3(-0.085, 0.025, 0.015)
+		bird.add_child(left_wing)
+		var left_wing_mesh := MeshInstance3D.new()
+		var left_shape := SphereMesh.new()
+		left_shape.radius = 0.12
+		left_shape.height = 0.12
+		left_wing_mesh.mesh = left_shape
+		left_wing_mesh.position.x = -0.205
+		left_wing_mesh.scale = Vector3(2.15, 0.18, 0.78)
+		left_wing_mesh.material_override = feather_material
+		left_wing.add_child(left_wing_mesh)
+		var right_wing := Node3D.new()
+		right_wing.position = Vector3(0.085, 0.025, 0.015)
+		bird.add_child(right_wing)
+		var right_wing_mesh := MeshInstance3D.new()
+		var right_shape := SphereMesh.new()
+		right_shape.radius = 0.12
+		right_shape.height = 0.12
+		right_wing_mesh.mesh = right_shape
+		right_wing_mesh.position.x = 0.205
+		right_wing_mesh.scale = Vector3(2.15, 0.18, 0.78)
+		right_wing_mesh.material_override = feather_material
+		right_wing.add_child(right_wing_mesh)
+		flying_birds.append({
+			"root": bird,
+			"left_wing": left_wing,
+			"right_wing": right_wing,
+			"center": Vector3(rng.randf_range(-8.0, 8.0), rng.randf_range(10.0, 16.0), rng.randf_range(-8.0, 8.0)),
+			"radius": rng.randf_range(5.0, 10.0),
+			"speed": rng.randf_range(0.12, 0.22),
+			"phase": rng.randf_range(0.0, TAU)
+		})
+
+
+func _create_walkable_staircases() -> void:
+	var stone_tread := _mat(Color(0.49, 0.46, 0.40), 0.93)
+	var riser_stone := _mat(Color(0.31, 0.32, 0.31), 0.96)
+	var rail_material := _mat(Color(0.105, 0.13, 0.15), 0.48)
+	_create_staircase("WestTerraceStairs", Vector3(-17.0, 0.0, 14.0), Vector3(1, 0, 0), 12, 0.36, 0.14, 3.5, stone_tread, riser_stone, rail_material)
+	_create_staircase("EastTerraceStairs", Vector3(17.0, 0.0, -14.0), Vector3(-1, 0, 0), 12, 0.36, 0.14, 3.5, stone_tread, riser_stone, rail_material)
+
+
+func _create_staircase(label: String, start: Vector3, forward: Vector3, step_count: int, tread_depth: float, step_height: float, width: float, tread_material: Material, riser_material: Material, rail_material: Material) -> void:
+	var stair_root := Node3D.new()
+	stair_root.name = label
+	stair_root.position = start
+	add_child(stair_root)
+	stair_root.look_at(start + forward.normalized(), Vector3.UP)
+	var total_run := float(step_count) * tread_depth
+	var total_rise := float(step_count) * step_height
+	var slope_angle := atan2(total_rise, total_run)
+
+	for step_index in range(step_count):
+		var tread_body := StaticBody3D.new()
+		tread_body.name = "StoneTread_%02d" % step_index
+		stair_root.add_child(tread_body)
+		var tread_box := BoxMesh.new()
+		tread_box.size = Vector3(width, step_height, tread_depth + 0.06)
+		var tread_mesh := MeshInstance3D.new()
+		tread_mesh.mesh = tread_box
+		tread_mesh.position = Vector3(0, (step_index + 1) * step_height - step_height * 0.5, -(step_index * tread_depth + tread_depth * 0.5))
+		tread_mesh.material_override = tread_material
+		tread_body.add_child(tread_mesh)
+		var tread_collision := CollisionShape3D.new()
+		var tread_shape := BoxShape3D.new()
+		tread_shape.size = tread_box.size
+		tread_collision.shape = tread_shape
+		tread_collision.position = tread_mesh.position
+		tread_body.add_child(tread_collision)
+
+		var riser := MeshInstance3D.new()
+		var riser_box := BoxMesh.new()
+		riser_box.size = Vector3(width, step_height + 0.025, 0.09)
+		riser.mesh = riser_box
+		riser.position = Vector3(0, (step_index + 0.5) * step_height, -((step_index + 1) * tread_depth))
+		riser.material_override = riser_material
+		tread_body.add_child(riser)
+
+		var edge_strip := MeshInstance3D.new()
+		var strip_box := BoxMesh.new()
+		strip_box.size = Vector3(width - 0.08, 0.035, 0.055)
+		edge_strip.mesh = strip_box
+		edge_strip.position = tread_mesh.position + Vector3(0, step_height * 0.5 + 0.008, -tread_depth * 0.5 + 0.012)
+		edge_strip.material_override = _mat(Color(0.68, 0.61, 0.48), 0.86)
+		tread_body.add_child(edge_strip)
+
+	for side in [-1.0, 1.0]:
+		for post_index in range(step_count + 1):
+			var post := MeshInstance3D.new()
+			var post_mesh := CylinderMesh.new()
+			post_mesh.top_radius = 0.055
+			post_mesh.bottom_radius = 0.075
+			post_mesh.height = 0.92
+			post.mesh = post_mesh
+			post.position = Vector3(side * (width * 0.5 + 0.10), post_index * step_height + 0.46, -(post_index * tread_depth))
+			post.material_override = rail_material
+			stair_root.add_child(post)
+		var rail := MeshInstance3D.new()
+		var rail_box := BoxMesh.new()
+		rail_box.size = Vector3(0.13, 0.13, sqrt(total_run * total_run + total_rise * total_rise))
+		rail.mesh = rail_box
+		rail.position = Vector3(side * (width * 0.5 + 0.10), total_rise * 0.5 + 0.88, -total_run * 0.5)
+		rail.rotation.x = slope_angle
+		rail.material_override = rail_material
+		stair_root.add_child(rail)
+
+	var ramp_body := StaticBody3D.new()
+	ramp_body.name = "AccessibleSideRamp"
+	ramp_body.position = Vector3(width * 0.5 + 1.15, total_rise * 0.5, -total_run * 0.5)
+	ramp_body.rotation.x = slope_angle
+	stair_root.add_child(ramp_body)
+	var ramp_box := BoxMesh.new()
+	ramp_box.size = Vector3(1.65, 0.18, sqrt(total_run * total_run + total_rise * total_rise))
+	var ramp_mesh := MeshInstance3D.new()
+	ramp_mesh.mesh = ramp_box
+	ramp_mesh.material_override = riser_material
+	ramp_body.add_child(ramp_mesh)
+	var ramp_collision := CollisionShape3D.new()
+	var ramp_shape := BoxShape3D.new()
+	ramp_shape.size = ramp_box.size
+	ramp_collision.shape = ramp_shape
+	ramp_body.add_child(ramp_collision)
+
+	var top_landing := StaticBody3D.new()
+	top_landing.name = "UpperLanding"
+	top_landing.position = Vector3(0, total_rise - 0.1, -(total_run + 0.72))
+	stair_root.add_child(top_landing)
+	var landing_box := BoxMesh.new()
+	landing_box.size = Vector3(width + 0.6, 0.2, 1.5)
+	var landing_mesh := MeshInstance3D.new()
+	landing_mesh.mesh = landing_box
+	landing_mesh.material_override = stone_material
+	top_landing.add_child(landing_mesh)
+	var landing_collision := CollisionShape3D.new()
+	var landing_shape := BoxShape3D.new()
+	landing_shape.size = landing_box.size
+	landing_collision.shape = landing_shape
+	top_landing.add_child(landing_collision)
+
 
 func _create_interior_furniture(center: Vector3) -> void:
 	var wood := _mat(Color(0.28, 0.14, 0.075), 0.72)
