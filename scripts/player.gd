@@ -432,6 +432,7 @@ func _build_pause_and_settings() -> void:
 	quality.add_item("LOW  •  PERFORMANCE", 0)
 	quality.add_item("MEDIUM  •  BALANCED", 1)
 	quality.add_item("HIGH  •  VISUAL", 2)
+	quality.add_item("CINEMATIC  •  MAX", 3)
 	quality.select(graphics_quality)
 	quality.item_selected.connect(_apply_graphics_quality)
 	settings_stack.add_child(quality)
@@ -500,6 +501,19 @@ func _apply_graphics_quality(index: int) -> void:
 		2:
 			camera.far = 260.0
 			Engine.max_fps = 60
+		3:
+			camera.far = 360.0
+			Engine.max_fps = 60
+	for cloud in get_tree().get_nodes_in_group("world_clouds"):
+		cloud.visible = index > 0
+	for cloud in get_tree().get_nodes_in_group("world_clouds_cinematic"):
+		cloud.visible = index >= 2
+	for world_env_node in get_tree().get_nodes_in_group("world_environment"):
+		var env: Environment = world_env_node.environment
+		env.glow_enabled = index >= 2
+		env.glow_intensity = 0.32 if index >= 2 else 0.0
+	for light in get_tree().get_nodes_in_group("world_sun"):
+		light.directional_shadow_max_distance = 45.0 if index == 0 else (85.0 if index == 1 else 130.0)
 	_save_player_settings()
 
 func _apply_touch_button_scale() -> void:
