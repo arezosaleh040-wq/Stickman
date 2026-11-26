@@ -46,6 +46,7 @@ var is_vaulting := false
 var footstep_clock := 0.0
 var inventory_panel: PanelContainer
 var hotbar_buttons: Array[Button] = []
+var inventory_hotbar_buttons: Array[Button] = []
 var storage_buttons: Array[Button] = []
 
 func _ready() -> void:
@@ -106,7 +107,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("jump"):
 		if is_on_floor():
 			velocity.y = jump_velocity
-			AudioManager.play_footstep()
+			AudioManager.play_jump()
 		else:
 			_try_parkour_jump(direction)
 	if is_on_floor() and direction.length() > 0.05:
@@ -526,6 +527,7 @@ func _build_inventory_ui(layer: CanvasLayer) -> void:
 		slot_button.add_theme_font_size_override("font_size", 10)
 		slot_button.pressed.connect(_select_hotbar_slot.bind(slot_index))
 		hotbar_grid.add_child(slot_button)
+		inventory_hotbar_buttons.append(slot_button)
 	var storage_title := Label.new()
 	storage_title.text = "BACKPACK / CHEST STORAGE  •  18 SLOTS"
 	root.add_child(storage_title)
@@ -566,6 +568,10 @@ func _refresh_inventory_ui() -> void:
 		hotbar_buttons[slot_index].text = "%d\n%s" % [slot_index + 1, item_text if not item_text.is_empty() else "—"]
 		hotbar_buttons[slot_index].modulate = Color(0.35, 0.86, 1.0, 1.0) if slot_index == GameState.selected_hotbar else Color(0.83, 0.9, 0.96, 0.88)
 	if inventory_panel and inventory_panel.visible:
+		for slot_index in range(mini(inventory_hotbar_buttons.size(), GameState.hotbar_slots.size())):
+			var hotbar_item := str(GameState.hotbar_slots[slot_index])
+			inventory_hotbar_buttons[slot_index].text = "%d\n%s" % [slot_index + 1, hotbar_item if not hotbar_item.is_empty() else "—"]
+			inventory_hotbar_buttons[slot_index].modulate = Color(0.35, 0.86, 1.0, 1.0) if slot_index == GameState.selected_hotbar else Color(0.83, 0.9, 0.96, 0.88)
 		for slot_index in range(mini(storage_buttons.size(), GameState.backpack_slots.size())):
 			var item_text := str(GameState.backpack_slots[slot_index])
 			storage_buttons[slot_index].text = "%d\n%s" % [slot_index + 1, item_text if not item_text.is_empty() else "—"]
