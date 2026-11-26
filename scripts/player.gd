@@ -30,6 +30,10 @@ var walk_phase := 0.0
 var body_torso: Node3D
 var body_hip: Node3D
 var body_head: Node3D
+var cape_pivot: Node3D
+var cape_mesh: MeshInstance3D
+var cape_material: ShaderMaterial
+var cape_phase := 0.0
 var was_on_floor := true
 var landing_bounce := 0.0
 var locomotion_blend := 0.0
@@ -98,10 +102,13 @@ func _physics_process(delta: float) -> void:
 			velocity.y = jump_velocity
 		else:
 			_try_parkour_jump(direction)
+	if is_on_floor() and direction.length() > 0.05:
+		_assist_stair_step(direction)
 	move_and_slide()
 	if not was_on_floor and is_on_floor():
 		landing_bounce = 0.18
 	_animate_character(delta, input_vector.length() > 0.1)
+	_sync_cape_equipment()
 	_update_interaction_prompt()
 	if message_timer > 0.0:
 		message_timer -= delta
@@ -168,6 +175,110 @@ func _animate_character(delta: float, moving: bool) -> void:
 		body_hip.rotation.x = lerpf(body_hip.rotation.x, 0.08 if airborne else 0.0, delta * 8.0)
 	if body_head:
 		body_head.rotation.x = lerpf(body_head.rotation.x, -0.025 * locomotion_blend, delta * 5.0)
+	_update_cape_motion(delta, horizontal_speed, sprinting, airborne)
+
+
+func _assist_stair_step(direction: Vector3) -> void:
+	var horizontal_motion := direction.normalized() * 0.25
+	if not test_move(global_transform, horizontal_motion):
+		return
+	var raised_transform := global_transform
+	raised_transform.origin.y += 0.16
+	if not test_move(raised_transform, horizontal_motion):
+		global_position.y += 0.16
+
+
+func _build_cape() -> void:
+	cape_pivot = Node3D.new()
+	cape_pivot.name = "ClothCapePivot"
+	cape_pivot.position = Vector3(0, 1.43, 0.14)
+	visual_root.add_child(cape_pivot)
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var columns := 10
+	var rows := 14
+	for row in range(rows + 1):
+		for column in range(columns + 1):
+			var u := float(column) / float(columns)
+			var v := float(row) / float(rows)
+			surface.set_uv(Vector2(u, v))
+			var width := lerpf(0.38, 0.48, v)
+			surface.add_vertex(Vector3((u - 0.5) * width * 2.0, 0.16 - v * 1.08, 0.0))
+	for row in range(rows):
+		for column in range(columns):
+			var a := row * (columns + 1) + column
+			var b := a + 1
+			var c := a + columns + 1
+			var d := c + 1
+			surface.add_index(a)
+			surface.add_index(c)
+			surface.add_index(b)
+			surface.add_index(b)
+			surface.add_index(c)
+			surface.add_index(d)
+	surface.generate_normals()
+	cape_mesh = MeshInstance3D.new()
+	cape_mesh.name = "AnimatedFabric"
+	cape_mesh.mesh = surface.commit()
+	cape_material = ShaderMaterial.new()
+	var cape_shader := Shader.new()
+	cape_shader.code = """
+shader_type spatial;
+render_mode cull_disabled;
+uniform vec4 cape_color : source_color = vec4(0.035, 0.105, 0.19, 1.0);
+uniform float motion_amount = 0.0;
+uniform float wind_amount = 0.35;
+uniform float phase = 0.0;
+void vertex() {
+	float edge_weight = pow(UV.y, 1.55);
+	float wave = sin(TIME * 4.8 + UV.y * 10.0 + UV.x * 3.6 + phase);
+	float cross_wave = cos(TIME * 3.1 + UV.y * 7.0 + phase * 1.7);
+	VERTEX.z += edge_weight * (0.035 + motion_amount * 0.16 + wind_amount * 0.045) * wave;
+	VERTEX.x += edge_weight * (0.025 + motion_amount * 0.055) * cross_wave;
+	VERTEX.y -= edge_weight * (0.018 + motion_amount * 0.025) * abs(wave);
+}
+void fragment() {
+	float fabric_shade = 0.91 + 0.09 * sin(UV.y * 18.0 + UV.x * 8.0);
+	ALBEDO = cape_color.rgb * fabric_shade;
+	ROUGHNESS = 0.78;
+	METALLIC = 0.04;
+}
+"""
+	cape_material.shader = cape_shader
+	cape_material.set_shader_parameter("cape_color", Color(0.035, 0.105, 0.19, 1.0))
+	cape_material.set_shader_parameter("phase", 0.73)
+	cape_mesh.material_override = cape_material
+	cape_pivot.add_child(cape_mesh)
+	var collar := MeshInstance3D.new()
+	collar.name = "CapeCollar"
+	var collar_mesh := BoxMesh.new()
+	collar_mesh.size = Vector3(0.55, 0.105, 0.13)
+	collar.mesh = collar_mesh
+	collar.position = Vector3(0, 0.115, -0.012)
+	collar.material_override = _material(Color(0.12, 0.17, 0.21), 0.54)
+	cape_pivot.add_child(collar)
+	cape_pivot.visible = false
+
+
+func _sync_cape_equipment() -> void:
+	if cape_pivot == null:
+		return
+	var inventory: Dictionary = GameState.inventory
+	var should_show := bool(inventory.get("cape_owned", false)) and bool(inventory.get("cape_equipped", false))
+	if cape_pivot.visible != should_show:
+		cape_pivot.visible = should_show
+
+
+func _update_cape_motion(delta: float, horizontal_speed: float, sprinting: bool, airborne: bool) -> void:
+	if cape_material == null:
+		return
+	var speed_ratio := clampf(horizontal_speed / maxf(sprint_speed, 0.1), 0.0, 1.0)
+	var target_motion := speed_ratio * (1.3 if sprinting else 0.72) + (0.38 if airborne else 0.0)
+	cape_phase += delta * (1.1 + speed_ratio * 2.4)
+	cape_material.set_shader_parameter("motion_amount", lerpf(float(cape_material.get_shader_parameter("motion_amount")), target_motion, delta * 4.5))
+	cape_material.set_shader_parameter("wind_amount", 0.28 + 0.12 * sin(Time.get_ticks_msec() * 0.0007))
+	cape_material.set_shader_parameter("phase", cape_phase)
+
 
 func _build_character() -> void:
 	body_mesh.visible = false
@@ -184,8 +295,7 @@ func _build_character() -> void:
 	_add_limb("RightArm", Vector3(0.19, 1.39, 0), 0.075, 0.58, dark)
 	_add_limb("LeftLeg", Vector3(-0.1, 0.48, 0), 0.09, 0.7, dark)
 	_add_limb("RightLeg", Vector3(0.1, 0.48, 0), 0.09, 0.7, dark)
-	_add_box("LeftFoot", Vector3(-0.1, 0.09, -0.07), Vector3(0.18, 0.13, 0.34), accent)
-	_add_box("RightFoot", Vector3(0.1, 0.09, -0.07), Vector3(0.18, 0.13, 0.34), accent)
+	_build_cape()
 
 func _material(color: Color, rough: float) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
@@ -232,6 +342,15 @@ func _add_limb(label: String, pos: Vector3, radius: float, length: float, mat: M
 	limb_mesh.position.y = -length * 0.38
 	limb_mesh.material_override = mat
 	pivot.add_child(limb_mesh)
+	if label.ends_with("Leg"):
+		var shoe := MeshInstance3D.new()
+		shoe.name = label + "Shoe"
+		var shoe_mesh := BoxMesh.new()
+		shoe_mesh.size = Vector3(0.20, 0.13, 0.34)
+		shoe.mesh = shoe_mesh
+		shoe.position = Vector3(0, -length * 0.69, -0.075)
+		shoe.material_override = _material(Color(0.05, 0.72, 0.95), 0.38)
+		pivot.add_child(shoe)
 	limbs.append(pivot)
 
 func _add_box(label: String, pos: Vector3, size_value: Vector3, mat: Material) -> void:
