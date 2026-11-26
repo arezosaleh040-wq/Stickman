@@ -21,6 +21,7 @@ func _ready() -> void:
 	_create_cloud_layers()
 	_create_ground()
 	_create_roads()
+	_create_rolling_hills()
 	_create_walkable_staircases()
 	_create_city_decor()
 	_create_flying_birds()
@@ -579,6 +580,84 @@ func _create_flying_birds() -> void:
 			"speed": rng.randf_range(0.12, 0.22),
 			"phase": rng.randf_range(0.0, TAU)
 		})
+
+
+
+func _create_rolling_hills() -> void:
+	_create_hill_mound("NorthwestRollingRise", Vector3(-44.0, 0.0, -18.0), 13.0, 3.1, 507)
+	_create_hill_mound("SoutheastRollingRise", Vector3(44.0, 0.0, 18.0), 13.0, 2.7, 814)
+
+
+func _create_hill_mound(label: String, center: Vector3, radius: float, peak_height: float, seed_value: int) -> void:
+	var noise := FastNoiseLite.new()
+	noise.seed = seed_value
+	noise.frequency = 0.22
+	noise.fractal_octaves = 3
+	noise.fractal_gain = 0.48
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var segments := 28
+	for z_index in range(segments):
+		for x_index in range(segments):
+			var x0 := -radius + (2.0 * radius * float(x_index) / float(segments))
+			var x1 := -radius + (2.0 * radius * float(x_index + 1) / float(segments))
+			var z0 := -radius + (2.0 * radius * float(z_index) / float(segments))
+			var z1 := -radius + (2.0 * radius * float(z_index + 1) / float(segments))
+			var p00 := Vector3(x0, _hill_height(x0, z0, radius, peak_height, noise), z0)
+			var p10 := Vector3(x1, _hill_height(x1, z0, radius, peak_height, noise), z0)
+			var p01 := Vector3(x0, _hill_height(x0, z1, radius, peak_height, noise), z1)
+			var p11 := Vector3(x1, _hill_height(x1, z1, radius, peak_height, noise), z1)
+			surface.set_uv(Vector2((x0 / radius + 1.0) * 0.5, (z0 / radius + 1.0) * 0.5))
+			surface.add_vertex(p00)
+			surface.set_uv(Vector2((x0 / radius + 1.0) * 0.5, (z1 / radius + 1.0) * 0.5))
+			surface.add_vertex(p01)
+			surface.set_uv(Vector2((x1 / radius + 1.0) * 0.5, (z0 / radius + 1.0) * 0.5))
+			surface.add_vertex(p10)
+			surface.set_uv(Vector2((x1 / radius + 1.0) * 0.5, (z0 / radius + 1.0) * 0.5))
+			surface.add_vertex(p10)
+			surface.set_uv(Vector2((x0 / radius + 1.0) * 0.5, (z1 / radius + 1.0) * 0.5))
+			surface.add_vertex(p01)
+			surface.set_uv(Vector2((x1 / radius + 1.0) * 0.5, (z1 / radius + 1.0) * 0.5))
+			surface.add_vertex(p11)
+	surface.generate_normals()
+	var hill_mesh := surface.commit()
+	var hill_body := StaticBody3D.new()
+	hill_body.name = label
+	hill_body.position = center
+	add_child(hill_body)
+	var hill_visual := MeshInstance3D.new()
+	hill_visual.mesh = hill_mesh
+	hill_visual.material_override = terrain_material
+	hill_body.add_child(hill_visual)
+	var hill_collision := CollisionShape3D.new()
+	hill_collision.shape = hill_mesh.create_trimesh_shape()
+	hill_body.add_child(hill_collision)
+
+	var rock_material := _mat(Color(0.35, 0.34, 0.31), 0.98)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value + 44
+	for rock_index in range(16):
+		var angle := rng.randf_range(0.0, TAU)
+		var distance := rng.randf_range(radius * 0.38, radius * 0.91)
+		var rock_x := cos(angle) * distance
+		var rock_z := sin(angle) * distance
+		var rock := MeshInstance3D.new()
+		var rock_mesh := SphereMesh.new()
+		rock_mesh.radius = 0.5
+		rock_mesh.height = 0.85
+		rock.mesh = rock_mesh
+		rock.position = Vector3(rock_x, _hill_height(rock_x, rock_z, radius, peak_height, noise) + 0.16, rock_z)
+		rock.scale = Vector3(rng.randf_range(0.25, 0.72), rng.randf_range(0.18, 0.48), rng.randf_range(0.22, 0.62))
+		rock.rotation = Vector3(rng.randf_range(-0.2, 0.2), rng.randf_range(0.0, TAU), rng.randf_range(-0.2, 0.2))
+		rock.material_override = rock_material
+		hill_body.add_child(rock)
+
+
+func _hill_height(local_x: float, local_z: float, radius: float, peak_height: float, noise: FastNoiseLite) -> float:
+	var distance := Vector2(local_x, local_z).length()
+	var edge := clampf(1.0 - distance / radius, 0.0, 1.0)
+	var natural_variation := noise.get_noise_2d(local_x + radius * 2.0, local_z - radius) * 0.10 * edge
+	return maxf(0.0, peak_height * pow(edge, 1.62) + natural_variation)
 
 
 func _create_walkable_staircases() -> void:
