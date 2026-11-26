@@ -297,18 +297,13 @@ func _build_touch_controls() -> void:
 	panel.add_theme_constant_override("separation", 10)
 	layer.add_child(panel)
 	var movement := VBoxContainer.new()
-	panel.add_child(movement)
 	_add_touch_button(movement, "▲", "move_forward")
 	var row := HBoxContainer.new()
 	movement.add_child(row)
 	_add_touch_button(row, "◀", "move_left")
 	_add_touch_button(row, "▼", "move_back")
 	_add_touch_button(row, "▶", "move_right")
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.add_child(spacer)
 	var actions := VBoxContainer.new()
-	panel.add_child(actions)
 	_add_touch_button(actions, "JUMP", "jump")
 	_add_touch_button(actions, "SPRINT", "sprint")
 	_add_touch_button(actions, "INTERACT", "interact")
@@ -316,8 +311,19 @@ func _build_touch_controls() -> void:
 	var menu_button := Button.new()
 	menu_button.text = "MENU"
 	menu_button.custom_minimum_size = Vector2(76, 42) * touch_button_scale
+	menu_button.add_to_group("touch_game_buttons")
 	menu_button.pressed.connect(_toggle_pause_menu)
 	actions.add_child(menu_button)
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if touch_layout_left:
+		panel.add_child(movement)
+		panel.add_child(spacer)
+		panel.add_child(actions)
+	else:
+		panel.add_child(actions)
+		panel.add_child(spacer)
+		panel.add_child(movement)
 
 func _add_touch_button(parent: Control, caption: String, action: String) -> void:
 	var button := Button.new()
@@ -342,6 +348,7 @@ func _build_pause_and_settings() -> void:
 	pause_overlay.color = Color(0.015, 0.025, 0.045, 0.88)
 	pause_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	pause_overlay.visible = false
+	pause_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
 	pause_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	var layer := get_node_or_null("GameHUD") as CanvasLayer
 	if layer == null:
@@ -523,4 +530,5 @@ func _load_player_settings() -> void:
 	graphics_quality = int(settings_config.get_value("graphics", "quality", 1))
 	camera.fov = camera_fov
 	camera.position.z = camera_distance
+	_apply_touch_button_scale()
 	_apply_graphics_quality(graphics_quality)
