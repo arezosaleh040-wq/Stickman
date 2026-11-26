@@ -17,6 +17,7 @@ var leaf_shader: Shader
 var traffic_cars: Array[Dictionary] = []
 var traffic_lights: Array[Dictionary] = []
 var traffic_elapsed := 0.0
+var traffic_dim_materials: Array[StandardMaterial3D] = []
 var menu_root: Control
 var loading_label: Label
 var loading_bar: ProgressBar
@@ -534,11 +535,14 @@ func _create_traffic_lights() -> void:
 
 
 func _dim_traffic_material(index: int) -> StandardMaterial3D:
-	var colors := [Color(0.12,0.018,0.012),Color(0.12,0.065,0.008),Color(0.008,0.10,0.025)]
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = colors[index]
-	mat.roughness = 0.35
-	return mat
+	if traffic_dim_materials.is_empty():
+		var colors := [Color(0.12,0.018,0.012),Color(0.12,0.065,0.008),Color(0.008,0.10,0.025)]
+		for color in colors:
+			var material := StandardMaterial3D.new()
+			material.albedo_color = color
+			material.roughness = 0.35
+			traffic_dim_materials.append(material)
+	return traffic_dim_materials[index]
 
 
 func _create_traffic_car(axis: String, direction: int, start: float, index: int) -> void:
@@ -551,8 +555,9 @@ func _create_traffic_car(axis: String, direction: int, start: float, index: int)
 	var chrome := _mat(Color(0.48,0.53,0.57),0.24)
 	var headlamp := _glow_material(Color(1.0,0.82,0.53))
 	var taillamp := _glow_material(Color(0.92,0.035,0.025))
-	var car := Node3D.new()
+	var car := AnimatableBody3D.new()
 	car.name = "TrafficCar_%s_%d_%d"%[axis,direction,index]
+	car.sync_to_physics = true
 	var lane := -float(direction)*2.1
 	if axis=="x":
 		car.position = Vector3(start,0,lane)
@@ -566,6 +571,12 @@ func _create_traffic_car(axis: String, direction: int, start: float, index: int)
 	_add_car_box(car,"Hood",Vector3(1.92,0.18,1.02),Vector3(0,1.28,-1.32),paint)
 	_add_car_box(car,"Cabin",Vector3(1.62,0.72,1.85),Vector3(0,1.49,0.05),glass)
 	_add_car_box(car,"Roof",Vector3(1.52,0.12,1.65),Vector3(0,1.88,0.05),paint)
+	var vehicle_collision := CollisionShape3D.new()
+	var vehicle_shape := BoxShape3D.new()
+	vehicle_shape.size = Vector3(2.1,1.55,3.9)
+	vehicle_collision.shape = vehicle_shape
+	vehicle_collision.position.y = 1.0
+	car.add_child(vehicle_collision)
 	for side in [-1.0,1.0]:
 		for axle in [-1.0,1.0]:
 			var wheel := MeshInstance3D.new()
@@ -830,18 +841,24 @@ func _spawn_door(title: String, info: String, pos: Vector3, destination: Vector3
 
 func _create_residents() -> void:
 	var residents := [
-		["Mira the Merchant", "The supply shop has useful items for long journeys.", Vector3(11, 0.1, 5)],
-		["Old Rowan", "The clock tower is the oldest landmark in this district.", Vector3(-11, 0.1, 4)],
-		["Kai the Courier", "The town office always has small jobs available.", Vector3(9, 0.1, -10)],
-		["Lena the Builder", "Some houses are for sale. Save your coins!", Vector3(-10, 0.1, -9)],
-		["Noah the Explorer", "Try jumping near low obstacles to vault across them.", Vector3(15, 0.1, 14)],
-		["Ari the Guide", "Explore the plaza, then visit the townhouse entrance.", Vector3(-15, 0.1, 13)]
+		["Mira the Merchant", "The supply shop has useful items for long journeys.", Vector3(9.5, 0.1, 5.5)],
+		["Old Rowan", "The clock tower is the oldest landmark in this district.", Vector3(-9.5, 0.1, 5.0)],
+		["Kai the Courier", "The town office always has small jobs available.", Vector3(10.0, 0.1, -10.0)],
+		["Lena the Builder", "Some houses are for sale. Save your coins!", Vector3(-10.0, 0.1, -9.5)],
+		["Noah the Explorer", "Try jumping near low obstacles to vault across them.", Vector3(14.0, 0.1, 9.5)],
+		["Ari the Guide", "Explore the plaza, then visit the townhouse entrance.", Vector3(-14.0, 0.1, -9.5)],
+		["Milo the Student", "The crosswalk lights change automatically. Wait for green.", Vector3(8.8, 0.1, 13.0)],
+		["Nora the Photographer", "The old district looks beautiful at sunset.", Vector3(-8.8, 0.1, -14.0)],
+		["Evan the Musician", "You can explore the side streets beyond the plaza.", Vector3(25.0, 0.1, 8.8)],
+		["Sana the Gardener", "The small parks are tucked between the city blocks.", Vector3(-25.0, 0.1, -8.8)]
 	]
 	for resident in residents:
 		var npc := CharacterBody3D.new()
 		npc.set_script(load("res://scripts/npc.gd"))
 		npc.set("display_name", resident[0])
 		npc.set("dialogue", resident[1])
+		npc.set("wander_radius", 2.6)
+		npc.set("move_speed", 1.15)
 		npc.position = resident[2]
 		add_child(npc)
 
