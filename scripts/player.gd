@@ -178,8 +178,9 @@ func _interact_nearest() -> void:
 				best_distance = distance
 				nearest = item
 	if nearest and nearest.has_method("interact"):
+		var was_mission_active := GameState.active_mission == "The First Errand" and not GameState.mission_completed
 		_show_message(nearest.interact())
-		if str(nearest.get("interaction_type")) == "mission":
+		if was_mission_active and str(nearest.get("interaction_type")) == "mission":
 			GameState.complete_mission(120, 35)
 			_show_message("Mission complete! +120 coins • +35 XP")
 
