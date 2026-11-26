@@ -13,6 +13,7 @@ func _ready() -> void:
 	_create_town()
 	_create_landmarks()
 	_create_city_services()
+	_create_sample_interior()
 	_create_player()
 	_create_world_hud()
 
@@ -210,3 +211,64 @@ func _mat(color: Color, roughness: float) -> StandardMaterial3D:
 	material.albedo_color = color
 	material.roughness = roughness
 	return material
+
+func _create_sample_interior() -> void:
+	var room_center := Vector3(500, 0, 500)
+	var stone := _mat(Color(0.34, 0.32, 0.29), 0.9)
+	var floor_mesh := MeshInstance3D.new()
+	var floor_box := BoxMesh.new()
+	floor_box.size = Vector3(14, 0.35, 12)
+	floor_mesh.mesh = floor_box
+	floor_mesh.position = room_center
+	floor_mesh.material_override = stone
+	add_child(floor_mesh)
+	var floor_body := StaticBody3D.new()
+	floor_body.position = room_center
+	add_child(floor_body)
+	var floor_collision := CollisionShape3D.new()
+	var floor_shape := BoxShape3D.new()
+	floor_shape.size = Vector3(14, 0.35, 12)
+	floor_collision.shape = floor_shape
+	floor_body.add_child(floor_collision)
+	for wall_data in [
+		[Vector3(0, 2, -6), Vector3(14, 4, 0.35)],
+		[Vector3(-7, 2, 0), Vector3(0.35, 4, 12)],
+		[Vector3(7, 2, 0), Vector3(0.35, 4, 12)],
+		[Vector3(0, 2, 6), Vector3(14, 4, 0.35)]
+	]:
+		var wall := StaticBody3D.new()
+		wall.position = room_center + wall_data[0]
+		add_child(wall)
+		var wall_mesh := MeshInstance3D.new()
+		var wall_box := BoxMesh.new()
+		wall_box.size = wall_data[1]
+		wall_mesh.mesh = wall_box
+		wall_mesh.material_override = stone
+		wall.add_child(wall_mesh)
+		var wall_collision := CollisionShape3D.new()
+		var wall_shape := BoxShape3D.new()
+		wall_shape.size = wall_data[1]
+		wall_collision.shape = wall_shape
+		wall.add_child(wall_collision)
+	_spawn_door("Townhouse Door", "Enter the furnished starter townhouse.", Vector3(7, 1, 10), room_center + Vector3(0, 1, 3), "You entered the townhouse.")
+	_spawn_door("Exit Townhouse", "Return to the city plaza.", room_center + Vector3(0, 1, 5), Vector3(7, 1, 12), "You returned to the city.")
+
+func _spawn_door(title: String, info: String, pos: Vector3, destination: Vector3, feedback: String) -> void:
+	var portal := Area3D.new()
+	portal.set_script(load("res://scripts/door_portal.gd"))
+	portal.set("display_name", title)
+	portal.set("destination", destination)
+	portal.set("message", feedback)
+	portal.position = pos
+	add_child(portal)
+	var mesh := MeshInstance3D.new()
+	var frame := BoxMesh.new()
+	frame.size = Vector3(1.4, 2.3, 0.18)
+	mesh.mesh = frame
+	mesh.material_override = _mat(Color(0.08, 0.65, 0.86), 0.32)
+	portal.add_child(mesh)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(1.8, 2.5, 1.3)
+	collision.shape = shape
+	portal.add_child(collision)
