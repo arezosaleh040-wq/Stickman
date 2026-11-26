@@ -2,7 +2,7 @@ extends StaticBody3D
 
 @export var display_name := "City Notice Board"
 @export_multiline var description := "A place to find work and local stories."
-@export_enum("mission", "job", "shop", "property") var interaction_type := "mission"
+@export_enum("mission", "job", "shop", "property", "card_terminal", "market_job", "market_shelf", "storage_chest") var interaction_type := "mission"
 @export var reward := 120
 @export var experience_reward := 35
 
@@ -38,4 +38,37 @@ func interact() -> String:
 				GameState.owned_properties.append(display_name)
 				return "Property acquired: " + display_name
 			return "This property costs 200 coins."
+		"card_terminal":
+			var moved := GameState.deposit_cash()
+			if moved <= 0:
+				return "CARD TERMINAL • No cash to deposit. Bank card balance: $%d." % GameState.bank_balance
+			AudioManager.play_card_beep()
+			return "DEPOSIT COMPLETE • $%d moved to your bank card. New balance: $%d." % [moved, GameState.bank_balance]
+		"market_job":
+			if GameState.market_shift_done:
+				return "SUPERMARKET • Your shift is already complete. Come back another day."
+			GameState.market_shift_done = true
+			GameState.add_cash(45)
+			GameState.add_experience(12)
+			return "SHIFT COMPLETE • You earned $45 cash and 12 XP."
+		"market_shelf":
+			var placed := false
+			for slot_index in range(GameState.hotbar_slots.size()):
+				if str(GameState.hotbar_slots[slot_index]).is_empty():
+					GameState.hotbar_slots[slot_index] = "Snack Pack"
+					placed = true
+					break
+			if not placed:
+				for slot_index in range(GameState.backpack_slots.size()):
+					if str(GameState.backpack_slots[slot_index]).is_empty():
+						GameState.backpack_slots[slot_index] = "Snack Pack"
+						placed = true
+						break
+			if not placed:
+				return "Your inventory is full."
+			GameState.set_wanted(GameState.wanted_level + 1)
+			AudioManager.play_alert()
+			return "UNPAID ITEM TAKEN • The store alarm alerted city police. Wanted level: %d." % GameState.wanted_level
+		"storage_chest":
+			return "CHEST OPENED • Swap items between your 9-slot hotbar and 18 storage slots."
 	return description
