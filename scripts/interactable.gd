@@ -2,7 +2,7 @@ extends StaticBody3D
 
 @export var display_name := "City Notice Board"
 @export_multiline var description := "A place to find work and local stories."
-@export_enum("mission", "job", "shop", "property", "card_terminal", "market_job", "market_shelf", "storage_chest") var interaction_type := "mission"
+@export_enum("mission", "job", "shop", "property", "card_terminal", "market_job", "market_shelf", "storage_chest", "courthouse") var interaction_type := "mission"
 @export var reward := 120
 @export var experience_reward := 35
 
@@ -71,4 +71,6 @@ func interact() -> String:
 			return "UNPAID ITEM TAKEN • The store alarm alerted city police. Wanted level: %d." % GameState.wanted_level
 		"storage_chest":
 			return "CHEST OPENED • Swap items between your 9-slot hotbar and 18 storage slots."
+		"courthouse":
+			return "COURTHOUSE • Your release is complete. Your inventory and progress are محفوظ."
 	return description
