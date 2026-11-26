@@ -298,7 +298,7 @@ func _create_landmarks() -> void:
 func _create_city_services() -> void:
 	_spawn_service("Mission Board", "Find your first city mission.", "mission", Vector3(3.5, 0.9, 3.5), Color(0.18, 0.55, 0.78))
 	_spawn_service("Work Office", "Take a quick city job.", "job", Vector3(-3.5, 0.9, 3.5), Color(0.78, 0.55, 0.18))
-	_spawn_service("Supply Shop", "Buy supplies for your journey.", "shop", Vector3(3.5, 0.9, -3.5), Color(0.24, 0.68, 0.42))
+	_spawn_service("Supply Shop", "Buy the animated travel cape for 120 coins, then equip or store it here.", "shop", Vector3(3.5, 0.9, -3.5), Color(0.24, 0.68, 0.42))
 	_spawn_service("Small Townhouse", "Purchase your first property.", "property", Vector3(-3.5, 0.9, -3.5), Color(0.64, 0.34, 0.72))
 
 func _spawn_service(title: String, info: String, kind: String, pos: Vector3, tint: Color) -> void:
@@ -597,28 +597,25 @@ func _create_hill_mound(label: String, center: Vector3, radius: float, peak_heig
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var segments := 28
+	for z_index in range(segments + 1):
+		for x_index in range(segments + 1):
+			var local_x := -radius + (2.0 * radius * float(x_index) / float(segments))
+			var local_z := -radius + (2.0 * radius * float(z_index) / float(segments))
+			var local_y := _hill_height(local_x, local_z, radius, peak_height, noise)
+			surface.set_uv(Vector2((local_x / radius + 1.0) * 0.5, (local_z / radius + 1.0) * 0.5))
+			surface.add_vertex(Vector3(local_x, local_y, local_z))
 	for z_index in range(segments):
 		for x_index in range(segments):
-			var x0 := -radius + (2.0 * radius * float(x_index) / float(segments))
-			var x1 := -radius + (2.0 * radius * float(x_index + 1) / float(segments))
-			var z0 := -radius + (2.0 * radius * float(z_index) / float(segments))
-			var z1 := -radius + (2.0 * radius * float(z_index + 1) / float(segments))
-			var p00 := Vector3(x0, _hill_height(x0, z0, radius, peak_height, noise), z0)
-			var p10 := Vector3(x1, _hill_height(x1, z0, radius, peak_height, noise), z0)
-			var p01 := Vector3(x0, _hill_height(x0, z1, radius, peak_height, noise), z1)
-			var p11 := Vector3(x1, _hill_height(x1, z1, radius, peak_height, noise), z1)
-			surface.set_uv(Vector2((x0 / radius + 1.0) * 0.5, (z0 / radius + 1.0) * 0.5))
-			surface.add_vertex(p00)
-			surface.set_uv(Vector2((x0 / radius + 1.0) * 0.5, (z1 / radius + 1.0) * 0.5))
-			surface.add_vertex(p01)
-			surface.set_uv(Vector2((x1 / radius + 1.0) * 0.5, (z0 / radius + 1.0) * 0.5))
-			surface.add_vertex(p10)
-			surface.set_uv(Vector2((x1 / radius + 1.0) * 0.5, (z0 / radius + 1.0) * 0.5))
-			surface.add_vertex(p10)
-			surface.set_uv(Vector2((x0 / radius + 1.0) * 0.5, (z1 / radius + 1.0) * 0.5))
-			surface.add_vertex(p01)
-			surface.set_uv(Vector2((x1 / radius + 1.0) * 0.5, (z1 / radius + 1.0) * 0.5))
-			surface.add_vertex(p11)
+			var a := z_index * (segments + 1) + x_index
+			var b := a + 1
+			var c := a + segments + 1
+			var d := c + 1
+			surface.add_index(a)
+			surface.add_index(c)
+			surface.add_index(b)
+			surface.add_index(b)
+			surface.add_index(c)
+			surface.add_index(d)
 	surface.generate_normals()
 	var hill_mesh := surface.commit()
 	var hill_body := StaticBody3D.new()
@@ -651,7 +648,6 @@ func _create_hill_mound(label: String, center: Vector3, radius: float, peak_heig
 		rock.rotation = Vector3(rng.randf_range(-0.2, 0.2), rng.randf_range(0.0, TAU), rng.randf_range(-0.2, 0.2))
 		rock.material_override = rock_material
 		hill_body.add_child(rock)
-
 
 func _hill_height(local_x: float, local_z: float, radius: float, peak_height: float, noise: FastNoiseLite) -> float:
 	var distance := Vector2(local_x, local_z).length()
