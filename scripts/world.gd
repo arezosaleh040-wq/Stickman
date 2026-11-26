@@ -43,7 +43,9 @@ func _ready() -> void:
 	await get_tree().process_frame
 	_create_landmarks()
 	_create_city_services()
+	_create_supermarket()
 	_create_residents()
+	_create_police_officer()
 	_create_sample_interior()
 	_create_traffic_system()
 	_set_loading_progress(82, "ADDING TRAFFIC AND PEOPLE")
@@ -744,6 +746,108 @@ func _create_city_services() -> void:
 	_spawn_service("Work Office", "Take a quick city job.", "job", Vector3(-3.5, 0.9, 3.5), Color(0.78, 0.55, 0.18))
 	_spawn_service("Supply Shop", "Buy the animated travel cape for 120 coins, then equip or store it here.", "shop", Vector3(3.5, 0.9, -3.5), Color(0.24, 0.68, 0.42))
 	_spawn_service("Small Townhouse", "Purchase your first property.", "property", Vector3(-3.5, 0.9, -3.5), Color(0.64, 0.34, 0.72))
+	_create_card_terminal(Vector3(11.1, 0.0, -4.2))
+
+func _create_card_terminal(pos: Vector3) -> void:
+	var terminal := StaticBody3D.new()
+	terminal.name = "CityCardReader"
+	terminal.set_script(INTERACTABLE_SCRIPT)
+	terminal.set("display_name", "Card Reader")
+	terminal.set("description", "Transfer all your wallet cash to your bank card.")
+	terminal.set("interaction_type", "card_terminal")
+	terminal.position = pos
+	add_child(terminal)
+	var body := MeshInstance3D.new()
+	var body_mesh := BoxMesh.new()
+	body_mesh.size = Vector3(0.76, 1.35, 0.48)
+	body.mesh = body_mesh
+	body.position.y = 0.68
+	body.material_override = _mat(Color(0.045, 0.075, 0.095), 0.42)
+	terminal.add_child(body)
+	var screen := MeshInstance3D.new()
+	var screen_mesh := BoxMesh.new()
+	screen_mesh.size = Vector3(0.48, 0.34, 0.035)
+	screen.mesh = screen_mesh
+	screen.position = Vector3(0, 1.02, -0.255)
+	screen.material_override = _glow_material(Color(0.05, 0.72, 0.95))
+	terminal.add_child(screen)
+	var slot := MeshInstance3D.new()
+	var slot_mesh := BoxMesh.new()
+	slot_mesh.size = Vector3(0.34, 0.045, 0.04)
+	slot.mesh = slot_mesh
+	slot.position = Vector3(0, 0.68, -0.26)
+	slot.material_override = _mat(Color(0.01, 0.015, 0.02), 0.3)
+	terminal.add_child(slot)
+	var keypad := MeshInstance3D.new()
+	var keypad_mesh := BoxMesh.new()
+	keypad_mesh.size = Vector3(0.38, 0.22, 0.05)
+	keypad.mesh = keypad_mesh
+	keypad.position = Vector3(0, 0.38, -0.26)
+	keypad.material_override = _mat(Color(0.16, 0.21, 0.25), 0.55)
+	terminal.add_child(keypad)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(0.82, 1.45, 0.55)
+	collision.shape = shape
+	collision.position.y = 0.72
+	terminal.add_child(collision)
+
+func _create_supermarket() -> void:
+	var center := Vector3(16.0, 0.0, -16.0)
+	var store := Node3D.new()
+	store.name = "Supermarket"
+	store.position = center
+	add_child(store)
+	var wall_mat := _mat(Color(0.64, 0.67, 0.65), 0.88)
+	var floor_mat := _mat(Color(0.34, 0.36, 0.35), 0.92)
+	_add_market_wall(store, Vector3(0, 0.12, 0), Vector3(9.4, 0.24, 8.2), floor_mat, "MarketFloor")
+	_add_market_wall(store, Vector3(0, 2.1, -4.0), Vector3(9.4, 4.2, 0.3), wall_mat, "MarketBackWall")
+	_add_market_wall(store, Vector3(-4.55, 2.1, 0), Vector3(0.3, 4.2, 8.2), wall_mat, "MarketLeftWall")
+	_add_market_wall(store, Vector3(4.55, 2.1, 0), Vector3(0.3, 4.2, 8.2), wall_mat, "MarketRightWall")
+	_add_market_wall(store, Vector3(-3.45, 2.1, 4.0), Vector3(2.5, 4.2, 0.3), wall_mat, "MarketFrontLeft")
+	_add_market_wall(store, Vector3(3.45, 2.1, 4.0), Vector3(2.5, 4.2, 0.3), wall_mat, "MarketFrontRight")
+	_add_market_wall(store, Vector3(0, 3.85, 4.0), Vector3(4.6, 0.7, 0.3), wall_mat, "MarketFrontHeader")
+	_add_market_wall(store, Vector3(0, 4.25, 0), Vector3(9.5, 0.2, 8.3), _mat(Color(0.12, 0.17, 0.19), 0.68), "MarketRoof")
+	var sign_label := Label3D.new()
+	sign_label.text = "SUPERMARKET"
+	sign_label.position = Vector3(0, 3.65, 4.22)
+	sign_label.font_size = 52
+	sign_label.modulate = Color(0.18, 0.88, 0.95)
+	sign_label.outline_size = 8
+	store.add_child(sign_label)
+	for shelf_z in [-2.6, -0.2]:
+		for shelf_x in [-2.6, 0.0, 2.6]:
+			_add_market_wall(store, Vector3(shelf_x, 0.9, shelf_z), Vector3(1.35, 1.8, 0.48), _mat(Color(0.36, 0.25, 0.16), 0.85), "MarketShelf")
+			for level in range(3):
+				var product_color: Color = [Color(0.18, 0.58, 0.34), Color(0.88, 0.58, 0.15), Color(0.22, 0.52, 0.82)][level]
+				_add_market_wall(store, Vector3(shelf_x, 0.45 + float(level) * 0.48, shelf_z + 0.27), Vector3(1.1, 0.22, 0.14), _mat(product_color, 0.72), "ProductRow")
+	_add_market_wall(store, Vector3(2.8, 0.72, 2.6), Vector3(2.8, 1.2, 0.8), _mat(Color(0.24, 0.27, 0.29), 0.55), "CheckoutCounter")
+	_spawn_service("Supermarket Shift", "Work one store shift and earn $45 cash.", "market_job", Vector3(16.0, 0.9, -12.6), Color(0.17, 0.63, 0.46))
+	_spawn_service("Store Shelf", "Take a snack pack from the shelf. This raises your wanted level.", "market_shelf", Vector3(13.1, 0.9, -16.0), Color(0.82, 0.42, 0.18))
+
+func _add_market_wall(parent: Node3D, local_pos: Vector3, dimensions: Vector3, material: Material, node_name: String) -> void:
+	var wall_body := StaticBody3D.new()
+	wall_body.name = node_name
+	wall_body.position = local_pos
+	parent.add_child(wall_body)
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = dimensions
+	mesh.mesh = box
+	mesh.material_override = material
+	wall_body.add_child(mesh)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = dimensions
+	collision.shape = shape
+	wall_body.add_child(collision)
+
+func _create_police_officer() -> void:
+	var officer := CharacterBody3D.new()
+	officer.name = "CityPoliceOfficer"
+	officer.set_script(load("res://scripts/police.gd"))
+	officer.position = Vector3(-12.0, 0.1, -10.0)
+	add_child(officer)
 
 func _spawn_service(title: String, info: String, kind: String, pos: Vector3, tint: Color) -> void:
 	var item := StaticBody3D.new()
@@ -801,6 +905,7 @@ func _create_sample_interior() -> void:
 	floor_mesh.material_override = stone
 	add_child(floor_mesh)
 	_create_interior_furniture(room_center)
+	_create_storage_chest(room_center)
 	var floor_body := StaticBody3D.new()
 	floor_body.position = room_center
 	add_child(floor_body)
@@ -831,6 +936,43 @@ func _create_sample_interior() -> void:
 		wall.add_child(wall_collision)
 	_spawn_door("Townhouse Door", "Enter the furnished starter townhouse.", Vector3(7, 1, 10), room_center + Vector3(0, 1, 3), "You entered the townhouse.")
 	_spawn_door("Exit Townhouse", "Return to the city plaza.", room_center + Vector3(0, 1, 5), Vector3(7, 1, 12), "You returned to the city.")
+
+func _create_storage_chest(room_center: Vector3) -> void:
+	var chest := StaticBody3D.new()
+	chest.name = "HomeStorageChest"
+	chest.set_script(INTERACTABLE_SCRIPT)
+	chest.set("display_name", "Storage Chest")
+	chest.set("description", "Open your stored items.")
+	chest.set("interaction_type", "storage_chest")
+	chest.position = room_center + Vector3(-4.2, 0.62, -3.6)
+	add_child(chest)
+	var base := MeshInstance3D.new()
+	var base_mesh := BoxMesh.new()
+	base_mesh.size = Vector3(1.35, 0.82, 0.9)
+	base.mesh = base_mesh
+	base.material_override = _mat(Color(0.35, 0.19, 0.075), 0.78)
+	chest.add_child(base)
+	var lid := MeshInstance3D.new()
+	var lid_mesh := BoxMesh.new()
+	lid_mesh.size = Vector3(1.4, 0.2, 0.95)
+	lid.mesh = lid_mesh
+	lid.position.y = 0.5
+	lid.material_override = _mat(Color(0.48, 0.27, 0.11), 0.68)
+	chest.add_child(lid)
+	var latch := MeshInstance3D.new()
+	var latch_mesh := BoxMesh.new()
+	latch_mesh.size = Vector3(0.16, 0.28, 0.08)
+	latch.mesh = latch_mesh
+	latch.position = Vector3(0, 0.18, -0.49)
+	latch.material_override = _mat(Color(0.82, 0.65, 0.25), 0.35)
+	chest.add_child(latch)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(1.45, 1.1, 1.0)
+	collision.shape = shape
+	collision.position.y = 0.05
+	chest.add_child(collision)
+
 
 func _spawn_door(title: String, info: String, pos: Vector3, destination: Vector3, feedback: String) -> void:
 	var portal := Area3D.new()
