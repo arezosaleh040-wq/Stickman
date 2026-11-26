@@ -10,6 +10,7 @@ config/description="Original 3D open-world mobile adventure"
 [autoload]
 GameState="*res://scripts/game_state.gd"
 SaveSystem="*res://scripts/save_system.gd"
+AudioManager="*res://scripts/audio_manager.gd"
 
 [display]
 window/handheld/orientation=0
