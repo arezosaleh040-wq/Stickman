@@ -7,6 +7,9 @@ An original 3D mobile open-world adventure project built with Godot 4.4.1.
 - Town trees, street lamps and a furnished starter townhouse interior.
 - Working entrance and exit portals between the city and the townhouse.
 - Dynamic directional sunlight and a running world clock.
+- Procedural moving 3D cloud formations with layered silhouettes and slow atmospheric drift.
+- Filmic tone mapping, subtle glow and distance fog, with mobile-friendly quality scaling.
+- Four graphics presets: performance, balanced, high visual and cinematic maximum.
 - Custom 3D Stickman assembled from meshes, with a basic procedural walk cycle.
 - First-person / third-person camera switching with free vertical and horizontal look.
 - Configurable look sensitivity, field of view, third-person camera distance and inverted vertical look.
