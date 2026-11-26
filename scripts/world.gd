@@ -14,24 +14,44 @@ var bark_material: StandardMaterial3D
 var plaster_material: StandardMaterial3D
 var stone_material: StandardMaterial3D
 var leaf_shader: Shader
+var traffic_cars: Array[Dictionary] = []
+var traffic_lights: Array[Dictionary] = []
+var traffic_elapsed := 0.0
+var menu_root: Control
+var loading_label: Label
+var loading_bar: ProgressBar
 
 func _ready() -> void:
+	_create_startup_screen()
+	await get_tree().process_frame
+	_set_loading_progress(8, "PREPARING CITY ENGINE")
 	_create_environment()
+	await get_tree().process_frame
 	_create_surface_materials()
 	_create_cloud_layers()
 	_create_ground()
 	_create_roads()
 	_create_rolling_hills()
+	_set_loading_progress(35, "LOADING TERRAIN AND ROADS")
+	await get_tree().process_frame
 	_create_walkable_staircases()
 	_create_city_decor()
 	_create_flying_birds()
 	_create_town()
+	_set_loading_progress(62, "GENERATING THE CITY")
+	await get_tree().process_frame
 	_create_landmarks()
 	_create_city_services()
 	_create_residents()
 	_create_sample_interior()
+	_create_traffic_system()
+	_set_loading_progress(82, "ADDING TRAFFIC AND PEOPLE")
+	await get_tree().process_frame
 	_create_player()
 	_create_world_hud()
+	_set_loading_progress(100, "WORLD READY")
+	await get_tree().create_timer(0.45).timeout
+	_show_main_menu()
 
 func _process(delta: float) -> void:
 	day_clock = fposmod(day_clock + delta * 0.0007, 1.0)
@@ -65,6 +85,7 @@ func _process(delta: float) -> void:
 	if clock_label:
 		var hour := int(day_clock * 24.0)
 		clock_label.text = "WORLD TIME  %02d:%02d" % [hour, int(fposmod(day_clock * 1440.0, 60.0))]
+	_update_traffic(delta)
 
 func _create_surface_materials() -> void:
 	terrain_material = _noise_material(Color(0.34, 0.43, 0.29), 0.98, 0.055, 5, 512)
@@ -223,6 +244,405 @@ func _create_roads() -> void:
 			stripe.position = Vector3(0, 0.1, i * 11.0) if axis == -1 else Vector3(i * 11.0, 0.1, 0)
 			stripe.material_override = line_mat
 			add_child(stripe)
+
+	var sidewalk := _mat(Color(0.39,0.39,0.37),0.94)
+	for side in [-1.0,1.0]:
+		_add_road_surface(Vector3(side*8.25,0.055,0),Vector3(2.0,0.11,220),sidewalk,"ArterialSidewalkV")
+		_add_road_surface(Vector3(0,0.055,side*8.25),Vector3(220,0.11,2.0),sidewalk,"ArterialSidewalkH")
+
+
+func _create_startup_screen() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "StartupMenu"
+	layer.layer = 40
+	layer.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(layer)
+	menu_root = Control.new()
+	menu_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_root.process_mode = Node.PROCESS_MODE_ALWAYS
+	menu_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	layer.add_child(menu_root)
+	var backdrop := TextureRect.new()
+	backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	backdrop.stretch_mode = TextureRect.STRETCH_SCALE
+	var gradient := Gradient.new()
+	gradient.colors = PackedColorArray([Color(0.018,0.04,0.085), Color(0.10,0.18,0.29), Color(0.48,0.25,0.19)])
+	gradient.offsets = PackedFloat32Array([0.0,0.58,1.0])
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.width = 1280
+	texture.height = 720
+	texture.fill_from = Vector2(0,0)
+	texture.fill_to = Vector2(0,1)
+	backdrop.texture = texture
+	menu_root.add_child(backdrop)
+	var skyline := Control.new()
+	skyline.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	skyline.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu_root.add_child(skyline)
+	for i in range(20):
+		var tower := ColorRect.new()
+		var h := 90.0 + float((i * 47) % 190)
+		tower.color = Color(0.012,0.026,0.048,0.96)
+		tower.anchor_left = float(i) / 20.0
+		tower.anchor_right = float(i + 1) / 20.0
+		tower.anchor_top = 1.0
+		tower.anchor_bottom = 1.0
+		tower.offset_left = 1
+		tower.offset_right = -1
+		tower.offset_top = -h
+		tower.offset_bottom = 0
+		skyline.add_child(tower)
+		for w in range(2):
+			var window := ColorRect.new()
+			window.color = Color(0.95,0.56,0.25,0.55) if (i+w)%3==0 else Color(0.18,0.55,0.78,0.38)
+			window.position = Vector2(8+w*18, -h+25+float((i*13+w*17)%65))
+			window.size = Vector2(5,9)
+			tower.add_child(window)
+	var shade := ColorRect.new()
+	shade.color = Color(0.005,0.012,0.025,0.42)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_root.add_child(shade)
+	var center := CenterContainer.new()
+	center.name = "LoadingCenter"
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu_root.add_child(center)
+	var stack := VBoxContainer.new()
+	stack.custom_minimum_size = Vector2(520,210)
+	stack.add_theme_constant_override("separation",14)
+	center.add_child(stack)
+	var title := Label.new()
+	title.text = "STICKMAN"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size",56)
+	title.add_theme_color_override("font_color",Color(0.88,0.95,1.0))
+	stack.add_child(title)
+	var subtitle := Label.new()
+	subtitle.text = "SHADOW WORLD  •  A LIVING CITY"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_font_size_override("font_size",18)
+	subtitle.add_theme_color_override("font_color",Color(0.38,0.82,1.0))
+	stack.add_child(subtitle)
+	loading_label = Label.new()
+	loading_label.text = "INITIALIZING..."
+	loading_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stack.add_child(loading_label)
+	loading_bar = ProgressBar.new()
+	loading_bar.custom_minimum_size = Vector2(380,12)
+	loading_bar.show_percentage = false
+	stack.add_child(loading_bar)
+
+
+func _set_loading_progress(value: float, message: String) -> void:
+	if loading_bar:
+		loading_bar.value = value
+	if loading_label:
+		loading_label.text = message
+
+
+func _show_main_menu() -> void:
+	get_tree().paused = true
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	loading_label.visible = false
+	loading_bar.visible = false
+	var center := CenterContainer.new()
+	center.name = "MainMenuCenter"
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	menu_root.add_child(center)
+	var panel := PanelContainer.new()
+	panel.custom_minimum_size = Vector2(390,360)
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.018,0.04,0.07,0.94)
+	panel_style.border_color = Color(0.12,0.63,0.88,0.9)
+	panel_style.set_border_width_all(1)
+	panel_style.set_corner_radius_all(18)
+	panel_style.content_margin_left = 28
+	panel_style.content_margin_right = 28
+	panel_style.content_margin_top = 22
+	panel_style.content_margin_bottom = 22
+	panel.add_theme_stylebox_override("panel",panel_style)
+	center.add_child(panel)
+	var buttons := VBoxContainer.new()
+	buttons.add_theme_constant_override("separation",12)
+	panel.add_child(buttons)
+	var heading := Label.new()
+	heading.text = "YOUR CITY. YOUR STORY."
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size",20)
+	buttons.add_child(heading)
+	_add_menu_button(buttons,"▶   PLAY",_start_game)
+	var continue_button := _add_menu_button(buttons,"↻   CONTINUE",_start_game)
+	continue_button.disabled = not SaveSystem.has_save()
+	_add_menu_button(buttons,"⚙   SETTINGS",_show_menu_settings)
+	_add_menu_button(buttons,"EXIT",func(): get_tree().quit())
+	var footer := Label.new()
+	footer.text = "EXPLORE  •  WORK  •  DRIVE  •  BUILD"
+	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	footer.add_theme_font_size_override("font_size",11)
+	footer.add_theme_color_override("font_color",Color(0.48,0.65,0.78))
+	buttons.add_child(footer)
+
+
+func _add_menu_button(parent: Control, caption: String, callback: Callable) -> Button:
+	var button := Button.new()
+	button.text = caption
+	button.custom_minimum_size = Vector2(320,48)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.focus_mode = Control.FOCUS_NONE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.06,0.16,0.24,0.98)
+	style.border_color = Color(0.12,0.55,0.76,0.85)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(9)
+	button.add_theme_stylebox_override("normal",style)
+	button.add_theme_color_override("font_color",Color(0.9,0.97,1.0))
+	button.add_theme_font_size_override("font_size",18)
+	button.pressed.connect(callback)
+	parent.add_child(button)
+	return button
+
+
+func _show_menu_settings() -> void:
+	var old := menu_root.get_node_or_null("MenuSettings")
+	if old:
+		old.queue_free()
+	var panel := PanelContainer.new()
+	panel.name = "MenuSettings"
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.position = Vector2(-175,155)
+	panel.custom_minimum_size = Vector2(350,180)
+	menu_root.add_child(panel)
+	var column := VBoxContainer.new()
+	panel.add_child(column)
+	var title := Label.new()
+	title.text = "GRAPHICS QUALITY"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	column.add_child(title)
+	for option in [["PERFORMANCE",0],["BALANCED",1],["HIGH",2],["CINEMATIC",3]]:
+		var button := Button.new()
+		button.text = option[0]
+		button.pressed.connect(func():
+			var players := get_tree().get_nodes_in_group("player")
+			if not players.is_empty():
+				players[0]._apply_graphics_quality(int(option[1]))
+			panel.queue_free()
+		)
+		column.add_child(button)
+	var close := Button.new()
+	close.text = "CLOSE"
+	close.pressed.connect(func(): panel.queue_free())
+	column.add_child(close)
+
+
+func _start_game() -> void:
+	get_tree().paused = false
+	menu_root.visible = false
+	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
+
+
+func _create_traffic_system() -> void:
+	_create_city_streets()
+	_create_traffic_lights()
+	for axis in ["x","z"]:
+		for direction in [-1,1]:
+			for index in range(2):
+				var start := -96.0 + float(index)*48.0 if direction>0 else 96.0-float(index)*48.0
+				_create_traffic_car(axis,direction,start,index)
+
+
+func _create_city_streets() -> void:
+	var sidewalk := _mat(Color(0.39,0.39,0.37),0.94)
+	var curb := _mat(Color(0.57,0.54,0.48),0.9)
+	for index in range(-5,6):
+		var offset := float(index)*16.0+8.0
+		_add_road_surface(Vector3(offset,0.035,0),Vector3(5.2,0.07,220),asphalt_material,"StreetV_%d"%index)
+		_add_road_surface(Vector3(0,0.035,offset),Vector3(220,0.07,5.2),asphalt_material,"StreetH_%d"%index)
+		for side in [-1.0,1.0]:
+			_add_road_surface(Vector3(offset+side*3.25,0.055,0),Vector3(1.25,0.11,220),sidewalk,"WalkV_%d_%d"%[index,int(side)])
+			_add_road_surface(Vector3(0,0.055,offset+side*3.25),Vector3(220,0.11,1.25),sidewalk,"WalkH_%d_%d"%[index,int(side)])
+			_add_road_surface(Vector3(offset+side*2.58,0.075,0),Vector3(0.12,0.15,220),curb,"CurbV_%d_%d"%[index,int(side)])
+			_add_road_surface(Vector3(0,0.075,offset+side*2.58),Vector3(220,0.15,0.12),curb,"CurbH_%d_%d"%[index,int(side)])
+	for side in [-1.0,1.0]:
+		_add_road_surface(Vector3(side*8.25,0.055,0),Vector3(2.0,0.11,220),sidewalk,"MainWalkV")
+		_add_road_surface(Vector3(0,0.055,side*8.25),Vector3(220,0.11,2.0),sidewalk,"MainWalkH")
+
+
+func _add_road_surface(pos: Vector3, dimensions: Vector3, material: Material, label: String) -> void:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = label
+	var box := BoxMesh.new()
+	box.size = dimensions
+	mesh_instance.mesh = box
+	mesh_instance.position = pos
+	mesh_instance.material_override = material
+	add_child(mesh_instance)
+
+
+func _glow_material(color: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.emission_enabled = true
+	material.emission = color
+	material.emission_energy_multiplier = 3.5
+	material.roughness = 0.25
+	return material
+
+
+func _create_traffic_lights() -> void:
+	var red := _glow_material(Color(0.95,0.025,0.015))
+	var yellow := _glow_material(Color(1.0,0.56,0.015))
+	var green := _glow_material(Color(0.025,0.95,0.18))
+	var housing := _mat(Color(0.025,0.035,0.045),0.4)
+	var pole_mat := _mat(Color(0.12,0.14,0.16),0.5)
+	var placements := [[Vector3(-9.2,0,-9.2),"x"],[Vector3(9.2,0,-9.2),"z"],[Vector3(9.2,0,9.2),"x"],[Vector3(-9.2,0,9.2),"z"]]
+	for i in range(placements.size()):
+		var item: Array = placements[i]
+		var root := Node3D.new()
+		root.name = "TrafficSignal_%d"%i
+		root.position = item[0]
+		add_child(root)
+		var pole := MeshInstance3D.new()
+		var pole_mesh := CylinderMesh.new()
+		pole_mesh.top_radius = 0.06
+		pole_mesh.bottom_radius = 0.09
+		pole_mesh.height = 4.8
+		pole.mesh = pole_mesh
+		pole.position.y = 2.4
+		pole.material_override = pole_mat
+		root.add_child(pole)
+		var case := MeshInstance3D.new()
+		var case_mesh := BoxMesh.new()
+		case_mesh.size = Vector3(0.52,1.45,0.38)
+		case.mesh = case_mesh
+		case.position = Vector3(0,4.05,0)
+		case.material_override = housing
+		root.add_child(case)
+		var bulbs: Array[MeshInstance3D] = []
+		for bulb_index in range(3):
+			var bulb := MeshInstance3D.new()
+			var sphere := SphereMesh.new()
+			sphere.radius = 0.145
+			sphere.height = 0.29
+			bulb.mesh = sphere
+			bulb.position = Vector3(0,4.55-float(bulb_index)*0.48,0.205)
+			bulb.material_override = _dim_traffic_material(bulb_index)
+			root.add_child(bulb)
+			bulbs.append(bulb)
+		traffic_lights.append({"axis":str(item[1]),"bulbs":bulbs,"materials":[red,yellow,green]})
+
+
+func _dim_traffic_material(index: int) -> StandardMaterial3D:
+	var colors := [Color(0.12,0.018,0.012),Color(0.12,0.065,0.008),Color(0.008,0.10,0.025)]
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = colors[index]
+	mat.roughness = 0.35
+	return mat
+
+
+func _create_traffic_car(axis: String, direction: int, start: float, index: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7331+index*31+(1 if axis=="x" else 0)+direction*7
+	var paints := [Color(0.72,0.12,0.09),Color(0.08,0.34,0.62),Color(0.72,0.69,0.59),Color(0.12,0.16,0.19),Color(0.63,0.48,0.22)]
+	var paint := _mat(paints[rng.randi_range(0,paints.size()-1)],0.25)
+	var glass := _mat(Color(0.025,0.085,0.12),0.16)
+	var rubber := _mat(Color(0.018,0.02,0.023),0.95)
+	var chrome := _mat(Color(0.48,0.53,0.57),0.24)
+	var headlamp := _glow_material(Color(1.0,0.82,0.53))
+	var taillamp := _glow_material(Color(0.92,0.035,0.025))
+	var car := Node3D.new()
+	car.name = "TrafficCar_%s_%d_%d"%[axis,direction,index]
+	var lane := -float(direction)*2.1
+	if axis=="x":
+		car.position = Vector3(start,0,lane)
+		car.rotation.y = -PI*0.5 if direction>0 else PI*0.5
+	else:
+		car.position = Vector3(lane,0,start)
+		car.rotation.y = PI if direction>0 else 0.0
+	add_child(car)
+	_add_car_box(car,"Chassis",Vector3(1.9,0.4,3.55),Vector3(0,0.65,0),rubber)
+	_add_car_box(car,"Body",Vector3(2.05,0.62,3.8),Vector3(0,0.92,0),paint)
+	_add_car_box(car,"Hood",Vector3(1.92,0.18,1.02),Vector3(0,1.28,-1.32),paint)
+	_add_car_box(car,"Cabin",Vector3(1.62,0.72,1.85),Vector3(0,1.49,0.05),glass)
+	_add_car_box(car,"Roof",Vector3(1.52,0.12,1.65),Vector3(0,1.88,0.05),paint)
+	for side in [-1.0,1.0]:
+		for axle in [-1.0,1.0]:
+			var wheel := MeshInstance3D.new()
+			wheel.name = "Wheel"
+			var wheel_mesh := CylinderMesh.new()
+			wheel_mesh.top_radius = 0.37
+			wheel_mesh.bottom_radius = 0.37
+			wheel_mesh.height = 0.22
+			wheel.mesh = wheel_mesh
+			wheel.position = Vector3(side,0.48,axle*1.22)
+			wheel.rotation.z = PI*0.5
+			wheel.material_override = rubber
+			car.add_child(wheel)
+			var hub := MeshInstance3D.new()
+			var hub_mesh := CylinderMesh.new()
+			hub_mesh.top_radius = 0.15
+			hub_mesh.bottom_radius = 0.15
+			hub_mesh.height = 0.23
+			hub.mesh = hub_mesh
+			hub.position = wheel.position
+			hub.rotation.z = PI*0.5
+			hub.material_override = chrome
+			car.add_child(hub)
+		_add_car_box(car,"Headlight",Vector3(0.42,0.16,0.06),Vector3(side*0.66,0.98,-1.94),headlamp)
+		_add_car_box(car,"TailLight",Vector3(0.34,0.18,0.06),Vector3(side*0.69,0.98,1.94),taillamp)
+	traffic_cars.append({"root":car,"axis":axis,"direction":direction,"position":start,"speed":rng.randf_range(5.0,7.0),"lane":lane})
+
+
+func _add_car_box(parent: Node3D, label: String, dimensions: Vector3, pos: Vector3, material: Material) -> void:
+	var mesh_instance := MeshInstance3D.new()
+	mesh_instance.name = label
+	var box := BoxMesh.new()
+	box.size = dimensions
+	mesh_instance.mesh = box
+	mesh_instance.position = pos
+	mesh_instance.material_override = material
+	parent.add_child(mesh_instance)
+
+
+func _update_traffic(delta: float) -> void:
+	if traffic_cars.is_empty():
+		return
+	traffic_elapsed += delta
+	var phase := fposmod(traffic_elapsed,24.0)
+	var x_state := "GREEN" if phase<10.0 else ("YELLOW" if phase<12.0 else "RED")
+	var z_state := "RED" if phase<10.0 else ("YELLOW" if phase<12.0 else ("GREEN" if phase<22.0 else "YELLOW"))
+	if phase>=22.0:
+		x_state = "RED"
+	for signal_data in traffic_lights:
+		var state := x_state if signal_data["axis"]=="x" else z_state
+		for i in range(3):
+			var active := (i==0 and state=="RED") or (i==1 and state=="YELLOW") or (i==2 and state=="GREEN")
+			var bulbs: Array = signal_data["bulbs"]
+			var materials: Array = signal_data["materials"]
+			(bulbs[i] as MeshInstance3D).material_override = materials[i] if active else _dim_traffic_material(i)
+	for car_data in traffic_cars:
+		var direction := int(car_data["direction"])
+		var position_value := float(car_data["position"])
+		var state := x_state if car_data["axis"]=="x" else z_state
+		var near_line := position_value>-12.0 and position_value< -7.5 if direction>0 else position_value<12.0 and position_value>7.5
+		if near_line and state!="GREEN":
+			position_value = -8.0 if direction>0 else 8.0
+		else:
+			position_value += float(direction)*float(car_data["speed"])*delta
+		if direction>0 and position_value>108.0:
+			position_value = -108.0
+		elif direction<0 and position_value< -108.0:
+			position_value = 108.0
+		car_data["position"] = position_value
+		var car: Node3D = car_data["root"]
+		if car_data["axis"]=="x":
+			car.position = Vector3(position_value,0,float(car_data["lane"]))
+		else:
+			car.position = Vector3(float(car_data["lane"]),0,position_value)
+		for child in car.get_children():
+			if child is MeshInstance3D and child.name=="Wheel":
+				child.rotate_x(delta*float(direction)*7.0)
 
 func _create_town() -> void:
 	var rng := RandomNumberGenerator.new()
