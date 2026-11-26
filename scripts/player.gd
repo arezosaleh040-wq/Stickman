@@ -43,6 +43,10 @@ var message_label: Label
 var message_timer := 0.0
 var parkour_cooldown := 0.0
 var is_vaulting := false
+var footstep_clock := 0.0
+var inventory_panel: PanelContainer
+var hotbar_buttons: Array[Button] = []
+var storage_buttons: Array[Button] = []
 
 func _ready() -> void:
 	add_to_group("player")
@@ -62,6 +66,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			_toggle_camera()
 		elif event.keycode == KEY_E:
 			_interact_nearest()
+		elif event.keycode == KEY_I:
+			_toggle_inventory()
 		elif event.keycode == KEY_F5:
 			SaveSystem.save_game()
 		elif event.keycode == KEY_F9:
@@ -100,6 +106,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("jump"):
 		if is_on_floor():
 			velocity.y = jump_velocity
+			AudioManager.play_footstep()
 		else:
 			_try_parkour_jump(direction)
 	if is_on_floor() and direction.length() > 0.05:
@@ -108,6 +115,14 @@ func _physics_process(delta: float) -> void:
 	if not was_on_floor and is_on_floor():
 		landing_bounce = 0.18
 	_animate_character(delta, input_vector.length() > 0.1)
+	if is_on_floor() and input_vector.length() > 0.1:
+		footstep_clock += delta
+		var step_interval := 0.34 if wants_sprint else 0.52
+		if footstep_clock >= step_interval:
+			AudioManager.play_footstep()
+			footstep_clock = 0.0
+	else:
+		footstep_clock = 0.0
 	_sync_cape_equipment()
 	_update_interaction_prompt()
 	if message_timer > 0.0:
@@ -115,7 +130,9 @@ func _physics_process(delta: float) -> void:
 		if message_timer <= 0.0:
 			message_label.text = ""
 	if hud_label:
-		hud_label.text = "STICKMAN  •  COINS %d  •  XP %d  •  STAMINA %d%%" % [GameState.money, GameState.experience, int(stamina)]
+		var wanted_text := "  •  WANTED %d★" % GameState.wanted_level if GameState.wanted_level > 0 else ""
+		hud_label.text = "COINS %d  •  CASH $%d  •  BANK $%d  •  XP %d  •  STA %d%%%s" % [GameState.money, GameState.cash_wallet, GameState.bank_balance, GameState.experience, int(stamina), wanted_text]
+	_refresh_inventory_ui()
 
 func _try_parkour_jump(direction: Vector3) -> void:
 	if parkour_cooldown > 0.0 or stamina < 12.0:
@@ -381,11 +398,16 @@ func _interact_nearest() -> void:
 				best_distance = distance
 				nearest = item
 	if nearest and nearest.has_method("interact"):
+		var interaction_type := str(nearest.get("interaction_type"))
 		var was_mission_active := GameState.active_mission == "The First Errand" and not GameState.mission_completed
 		_show_message(nearest.interact())
-		if was_mission_active and str(nearest.get("interaction_type")) == "mission":
+		if interaction_type == "storage_chest":
+			inventory_panel.visible = true
+			AudioManager.play_card_beep()
+		if was_mission_active and interaction_type == "mission":
 			GameState.complete_mission(120, 35)
 			_show_message("Mission complete! +120 coins • +35 XP")
+		_refresh_inventory_ui()
 
 func _update_interaction_prompt() -> void:
 	var found := false
@@ -441,6 +463,115 @@ func _build_hud() -> void:
 	message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	message_label.add_theme_color_override("font_color", Color(0.7, 1.0, 0.78))
 	layer.add_child(message_label)
+	_build_inventory_ui(layer)
+
+func _build_inventory_ui(layer: CanvasLayer) -> void:
+	var hotbar_panel := PanelContainer.new()
+	hotbar_panel.name = "MinecraftHotbar"
+	hotbar_panel.anchor_left = 0.5
+	hotbar_panel.anchor_right = 0.5
+	hotbar_panel.anchor_top = 0.855
+	hotbar_panel.anchor_bottom = 0.985
+	hotbar_panel.offset_left = -315
+	hotbar_panel.offset_right = 315
+	hotbar_panel.offset_top = 0
+	hotbar_panel.offset_bottom = 0
+	layer.add_child(hotbar_panel)
+	var hotbar_row := HBoxContainer.new()
+	hotbar_row.add_theme_constant_override("separation", 4)
+	hotbar_panel.add_child(hotbar_row)
+	for slot_index in range(9):
+		var slot_button := Button.new()
+		slot_button.custom_minimum_size = Vector2(65, 52)
+		slot_button.focus_mode = Control.FOCUS_NONE
+		slot_button.add_theme_font_size_override("font_size", 11)
+		slot_button.pressed.connect(_select_hotbar_slot.bind(slot_index))
+		hotbar_row.add_child(slot_button)
+		hotbar_buttons.append(slot_button)
+	inventory_panel = PanelContainer.new()
+	inventory_panel.name = "InventoryAndChest"
+	inventory_panel.set_anchors_preset(Control.PRESET_CENTER)
+	inventory_panel.position = Vector2(-335, -245)
+	inventory_panel.custom_minimum_size = Vector2(670, 490)
+	inventory_panel.visible = false
+	inventory_panel.z_index = 20
+	layer.add_child(inventory_panel)
+	var root := VBoxContainer.new()
+	root.add_theme_constant_override("separation", 10)
+	inventory_panel.add_child(root)
+	var heading_row := HBoxContainer.new()
+	root.add_child(heading_row)
+	var heading := Label.new()
+	heading.text = "PLAYER INVENTORY  •  BANK CARD"
+	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	heading.add_theme_font_size_override("font_size", 19)
+	heading_row.add_child(heading)
+	var close_button := Button.new()
+	close_button.text = "X"
+	close_button.pressed.connect(_toggle_inventory)
+	heading_row.add_child(close_button)
+	var wallet_label := Label.new()
+	wallet_label.name = "WalletSummary"
+	root.add_child(wallet_label)
+	var hotbar_title := Label.new()
+	hotbar_title.text = "HOTBAR  •  9 QUICK SLOTS"
+	root.add_child(hotbar_title)
+	var hotbar_grid := GridContainer.new()
+	hotbar_grid.columns = 9
+	hotbar_grid.add_theme_constant_override("h_separation", 5)
+	root.add_child(hotbar_grid)
+	for slot_index in range(9):
+		var slot_button := Button.new()
+		slot_button.custom_minimum_size = Vector2(62, 50)
+		slot_button.add_theme_font_size_override("font_size", 10)
+		slot_button.pressed.connect(_select_hotbar_slot.bind(slot_index))
+		hotbar_grid.add_child(slot_button)
+	var storage_title := Label.new()
+	storage_title.text = "BACKPACK / CHEST STORAGE  •  18 SLOTS"
+	root.add_child(storage_title)
+	var storage_grid := GridContainer.new()
+	storage_grid.columns = 9
+	storage_grid.add_theme_constant_override("h_separation", 5)
+	storage_grid.add_theme_constant_override("v_separation", 5)
+	root.add_child(storage_grid)
+	for slot_index in range(18):
+		var slot_button := Button.new()
+		slot_button.custom_minimum_size = Vector2(62, 48)
+		slot_button.add_theme_font_size_override("font_size", 10)
+		slot_button.pressed.connect(_swap_storage_slot.bind(slot_index))
+		storage_grid.add_child(slot_button)
+		storage_buttons.append(slot_button)
+	_refresh_inventory_ui()
+
+func _toggle_inventory() -> void:
+	if inventory_panel == null:
+		return
+	inventory_panel.visible = not inventory_panel.visible
+	_refresh_inventory_ui()
+
+func _select_hotbar_slot(slot_index: int) -> void:
+	GameState.selected_hotbar = clampi(slot_index, 0, 8)
+	_refresh_inventory_ui()
+
+func _swap_storage_slot(slot_index: int) -> void:
+	var selected := GameState.selected_hotbar
+	var item = GameState.hotbar_slots[selected]
+	GameState.hotbar_slots[selected] = GameState.backpack_slots[slot_index]
+	GameState.backpack_slots[slot_index] = item
+	_refresh_inventory_ui()
+
+func _refresh_inventory_ui() -> void:
+	for slot_index in range(mini(hotbar_buttons.size(), GameState.hotbar_slots.size())):
+		var item_text := str(GameState.hotbar_slots[slot_index])
+		hotbar_buttons[slot_index].text = "%d\n%s" % [slot_index + 1, item_text if not item_text.is_empty() else "—"]
+		hotbar_buttons[slot_index].modulate = Color(0.35, 0.86, 1.0, 1.0) if slot_index == GameState.selected_hotbar else Color(0.83, 0.9, 0.96, 0.88)
+	if inventory_panel and inventory_panel.visible:
+		for slot_index in range(mini(storage_buttons.size(), GameState.backpack_slots.size())):
+			var item_text := str(GameState.backpack_slots[slot_index])
+			storage_buttons[slot_index].text = "%d\n%s" % [slot_index + 1, item_text if not item_text.is_empty() else "—"]
+		var wallet_label := inventory_panel.find_child("WalletSummary", true, false) as Label
+		if wallet_label:
+			wallet_label.text = "CASH $%d     BANK CARD $%d     COINS %d" % [GameState.cash_wallet, GameState.bank_balance, GameState.money]
 
 func _build_touch_controls() -> void:
 	var layer := CanvasLayer.new()
@@ -465,6 +596,7 @@ func _build_touch_controls() -> void:
 	_add_touch_button(actions, "SPRINT", "sprint")
 	_add_touch_button(actions, "INTERACT", "interact")
 	_add_touch_button(actions, "CAMERA", "camera_toggle")
+	_add_touch_button(actions, "BAG", "inventory_toggle")
 	var menu_button := Button.new()
 	menu_button.text = "MENU"
 	menu_button.custom_minimum_size = Vector2(76, 42) * touch_button_scale
@@ -494,6 +626,8 @@ func _add_touch_button(parent: Control, caption: String, action: String) -> void
 		button.pressed.connect(_toggle_camera)
 	elif action == "interact":
 		button.pressed.connect(_interact_nearest)
+	elif action == "inventory_toggle":
+		button.pressed.connect(_toggle_inventory)
 	else:
 		button.button_down.connect(func(): Input.action_press(action))
 		button.button_up.connect(func(): Input.action_release(action))
