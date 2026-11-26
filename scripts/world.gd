@@ -13,6 +13,7 @@ func _ready() -> void:
 	_create_town()
 	_create_landmarks()
 	_create_city_services()
+	_create_residents()
 	_create_sample_interior()
 	_create_player()
 	_create_world_hud()
@@ -272,3 +273,20 @@ func _spawn_door(title: String, info: String, pos: Vector3, destination: Vector3
 	shape.size = Vector3(1.8, 2.5, 1.3)
 	collision.shape = shape
 	portal.add_child(collision)
+
+func _create_residents() -> void:
+	var residents := [
+		["Mira the Merchant", "The supply shop has useful items for long journeys.", Vector3(11, 0.1, 5)],
+		["Old Rowan", "The clock tower is the oldest landmark in this district.", Vector3(-11, 0.1, 4)],
+		["Kai the Courier", "The town office always has small jobs available.", Vector3(9, 0.1, -10)],
+		["Lena the Builder", "Some houses are for sale. Save your coins!", Vector3(-10, 0.1, -9)],
+		["Noah the Explorer", "Try jumping near low obstacles to vault across them.", Vector3(15, 0.1, 14)],
+		["Ari the Guide", "Explore the plaza, then visit the townhouse entrance.", Vector3(-15, 0.1, 13)]
+	]
+	for resident in residents:
+		var npc := CharacterBody3D.new()
+		npc.set_script(load("res://scripts/npc.gd"))
+		npc.set("display_name", resident[0])
+		npc.set("dialogue", resident[1])
+		npc.position = resident[2]
+		add_child(npc)
