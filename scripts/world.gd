@@ -240,14 +240,6 @@ func _create_roads() -> void:
 		road.position.y = 0.045
 		road.material_override = road_mat
 		add_child(road)
-		for i in range(-9, 10):
-			var stripe := MeshInstance3D.new()
-			var stripe_mesh := BoxMesh.new()
-			stripe_mesh.size = Vector3(0.18, 0.025, 3.0) if axis == -1 else Vector3(3.0, 0.025, 0.18)
-			stripe.mesh = stripe_mesh
-			stripe.position = Vector3(0, 0.1, i * 11.0) if axis == -1 else Vector3(i * 11.0, 0.1, 0)
-			stripe.material_override = line_mat
-			add_child(stripe)
 
 	var sidewalk := _mat(Color(0.39,0.39,0.37),0.94)
 	for side in [-1.0,1.0]:
@@ -1078,8 +1070,8 @@ func _create_residents() -> void:
 		npc.set_script(load("res://scripts/npc.gd"))
 		npc.set("display_name", resident[0])
 		npc.set("dialogue", resident[1])
-		npc.set("wander_radius", 1.15)
-		npc.set("move_speed", 1.15)
+		npc.set("wander_radius", 105.0)
+		npc.set("move_speed", 1.65)
 		npc.position = resident[2]
 		add_child(npc)
 
