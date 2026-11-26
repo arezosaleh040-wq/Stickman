@@ -21,6 +21,7 @@ var graphics_quality := 1
 var touch_layout_left := true
 var pause_overlay: ColorRect
 var settings_panel: PanelContainer
+var pause_card: PanelContainer
 var settings_config := ConfigFile.new()
 var stamina := 100.0
 var visual_root: Node3D
@@ -360,6 +361,7 @@ func _build_pause_and_settings() -> void:
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	pause_overlay.add_child(center)
 	var card := PanelContainer.new()
+	pause_card = card
 	card.custom_minimum_size = Vector2(320, 0)
 	center.add_child(card)
 	var stack := VBoxContainer.new()
@@ -447,6 +449,7 @@ func _build_pause_and_settings() -> void:
 	back.text = "BACK TO PAUSE MENU"
 	back.pressed.connect(func():
 		settings_panel.visible = false
+		pause_card.visible = true
 	)
 	settings_stack.add_child(back)
 
@@ -471,6 +474,7 @@ func _toggle_pause_menu() -> void:
 		return
 	pause_overlay.visible = not pause_overlay.visible
 	settings_panel.visible = false
+	pause_card.visible = true
 	get_tree().paused = pause_overlay.visible
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if pause_overlay.visible else Input.MOUSE_MODE_CAPTURED
 
@@ -481,6 +485,7 @@ func _close_pause_menu() -> void:
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func _open_settings() -> void:
+	pause_card.visible = false
 	settings_panel.visible = true
 
 func _apply_graphics_quality(index: int) -> void:
