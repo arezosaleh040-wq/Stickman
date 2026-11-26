@@ -854,23 +854,23 @@ func _spawn_door(title: String, info: String, pos: Vector3, destination: Vector3
 
 func _create_residents() -> void:
 	var residents := [
-		["Mira the Merchant", "The supply shop has useful items for long journeys.", Vector3(9.5, 0.1, 5.5)],
-		["Old Rowan", "The clock tower is the oldest landmark in this district.", Vector3(-9.5, 0.1, 5.0)],
-		["Kai the Courier", "The town office always has small jobs available.", Vector3(10.0, 0.1, -10.0)],
-		["Lena the Builder", "Some houses are for sale. Save your coins!", Vector3(-10.0, 0.1, -9.5)],
-		["Noah the Explorer", "Try jumping near low obstacles to vault across them.", Vector3(14.0, 0.1, 9.5)],
-		["Ari the Guide", "Explore the plaza, then visit the townhouse entrance.", Vector3(-14.0, 0.1, -9.5)],
-		["Milo the Student", "The crosswalk lights change automatically. Wait for green.", Vector3(8.8, 0.1, 13.0)],
-		["Nora the Photographer", "The old district looks beautiful at sunset.", Vector3(-8.8, 0.1, -14.0)],
-		["Evan the Musician", "You can explore the side streets beyond the plaza.", Vector3(25.0, 0.1, 8.8)],
-		["Sana the Gardener", "The small parks are tucked between the city blocks.", Vector3(-25.0, 0.1, -8.8)]
+		["Mira the Merchant", "The supply shop has useful items for long journeys.", Vector3(8.25, 0.1, 5.5)],
+		["Old Rowan", "The clock tower is the oldest landmark in this district.", Vector3(-8.25, 0.1, 5.0)],
+		["Kai the Courier", "The town office always has small jobs available.", Vector3(8.25, 0.1, -10.0)],
+		["Lena the Builder", "Some houses are for sale. Save your coins!", Vector3(-8.25, 0.1, -9.5)],
+		["Noah the Explorer", "Try jumping near low obstacles to vault across them.", Vector3(14.0, 0.1, 8.25)],
+		["Ari the Guide", "Explore the plaza, then visit the townhouse entrance.", Vector3(-14.0, 0.1, -8.25)],
+		["Milo the Student", "The crosswalk lights change automatically. Wait for green.", Vector3(8.25, 0.1, 13.0)],
+		["Nora the Photographer", "The old district looks beautiful at sunset.", Vector3(-8.25, 0.1, -14.0)],
+		["Evan the Musician", "You can explore the side streets beyond the plaza.", Vector3(27.25, 0.1, 8.0)],
+		["Sana the Gardener", "The small parks are tucked between the city blocks.", Vector3(-27.25, 0.1, -8.0)]
 	]
 	for resident in residents:
 		var npc := CharacterBody3D.new()
 		npc.set_script(load("res://scripts/npc.gd"))
 		npc.set("display_name", resident[0])
 		npc.set("dialogue", resident[1])
-		npc.set("wander_radius", 2.6)
+		npc.set("wander_radius", 1.15)
 		npc.set("move_speed", 1.15)
 		npc.position = resident[2]
 		add_child(npc)
