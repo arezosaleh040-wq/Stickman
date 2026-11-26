@@ -27,6 +27,12 @@ var stamina := 100.0
 var visual_root: Node3D
 var limbs: Array[Node3D] = []
 var walk_phase := 0.0
+var body_torso: Node3D
+var body_hip: Node3D
+var body_head: Node3D
+var was_on_floor := true
+var landing_bounce := 0.0
+var locomotion_blend := 0.0
 var hud_label: Label
 var prompt_label: Label
 var message_label: Label
@@ -73,7 +79,8 @@ func _rotate_camera(relative: Vector2) -> void:
 
 func _physics_process(delta: float) -> void:
 	parkour_cooldown = maxf(0.0, parkour_cooldown - delta)
-	if not is_on_floor():
+	was_on_floor = is_on_floor()
+	if not was_on_floor:
 		velocity.y -= gravity * delta
 	var input_vector := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction := (transform.basis * Vector3(input_vector.x, 0, input_vector.y)).normalized()
@@ -92,6 +99,8 @@ func _physics_process(delta: float) -> void:
 		else:
 			_try_parkour_jump(direction)
 	move_and_slide()
+	if not was_on_floor and is_on_floor():
+		landing_bounce = 0.18
 	_animate_character(delta, input_vector.length() > 0.1)
 	_update_interaction_prompt()
 	if message_timer > 0.0:
@@ -128,13 +137,37 @@ func _try_parkour_jump(direction: Vector3) -> void:
 	parkour_cooldown = 0.55
 
 func _animate_character(delta: float, moving: bool) -> void:
+	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
+	var sprinting := Input.is_action_pressed("sprint") and moving and stamina > 0.0
+	var target_blend := clampf(horizontal_speed / maxf(sprint_speed, 0.1), 0.0, 1.0)
+	locomotion_blend = move_toward(locomotion_blend, target_blend, delta * 5.5)
 	if moving:
-		walk_phase += delta * (13.0 if Input.is_action_pressed("sprint") else 8.0)
+		walk_phase += delta * (15.0 if sprinting else 9.0) * lerpf(0.45, 1.0, locomotion_blend)
 	else:
-		walk_phase = move_toward(walk_phase, 0.0, delta * 5.0)
+		walk_phase = move_toward(walk_phase, 0.0, delta * 6.0)
+	var airborne := not is_on_floor()
+	var run_amount := 1.0 if sprinting else 0.0
 	for i in range(limbs.size()):
-		var amount := sin(walk_phase + (PI if i % 2 == 1 else 0.0)) * 0.62 if moving else 0.0
-		limbs[i].rotation.x = lerpf(limbs[i].rotation.x, amount, delta * 12.0)
+		var phase_offset := PI if i == 1 or i == 3 else 0.0
+		var stride := sin(walk_phase + phase_offset)
+		var amount := stride * lerpf(0.42, 0.78, run_amount) * locomotion_blend
+		if i < 2:
+			amount = -amount * 0.82
+			limbs[i].rotation.z = lerpf(limbs[i].rotation.z, (-0.12 if i == 0 else 0.12) * locomotion_blend, delta * 7.0)
+		else:
+			limbs[i].rotation.z = lerpf(limbs[i].rotation.z, 0.0, delta * 8.0)
+		if airborne:
+			amount = -0.38 if i >= 2 else 0.32
+		limbs[i].rotation.x = lerpf(limbs[i].rotation.x, amount, delta * (10.0 if airborne else 13.0))
+	landing_bounce = move_toward(landing_bounce, 0.0, delta * 1.8)
+	if body_torso:
+		var lean := -0.10 * locomotion_blend if sprinting else -0.035 * locomotion_blend
+		body_torso.rotation.x = lerpf(body_torso.rotation.x, lean + (0.12 if airborne else 0.0), delta * 7.0)
+		body_torso.position.y = lerpf(body_torso.position.y, 1.12 + (sin(walk_phase * 2.0) * 0.035 * locomotion_blend if not airborne else -landing_bounce), delta * 10.0)
+	if body_hip:
+		body_hip.rotation.x = lerpf(body_hip.rotation.x, 0.08 if airborne else 0.0, delta * 8.0)
+	if body_head:
+		body_head.rotation.x = lerpf(body_head.rotation.x, -0.025 * locomotion_blend, delta * 5.0)
 
 func _build_character() -> void:
 	body_mesh.visible = false
@@ -144,9 +177,9 @@ func _build_character() -> void:
 	var dark := _material(Color(0.045, 0.055, 0.075), 0.38)
 	var accent := _material(Color(0.05, 0.72, 0.95), 0.3)
 	var skin := _material(Color(0.92, 0.78, 0.62), 0.55)
-	_add_sphere("Head", Vector3(0, 1.66, 0), Vector3(0.27, 0.27, 0.27), skin)
-	_add_capsule("Torso", Vector3(0, 1.12, 0), 0.16, 0.72, accent)
-	_add_capsule("Hip", Vector3(0, 0.72, 0), 0.17, 0.22, dark)
+	body_head = _add_sphere("Head", Vector3(0, 1.66, 0), Vector3(0.27, 0.27, 0.27), skin)
+	body_torso = _add_capsule("Torso", Vector3(0, 1.12, 0), 0.16, 0.72, accent)
+	body_hip = _add_capsule("Hip", Vector3(0, 0.72, 0), 0.17, 0.22, dark)
 	_add_limb("LeftArm", Vector3(-0.19, 1.39, 0), 0.075, 0.58, dark)
 	_add_limb("RightArm", Vector3(0.19, 1.39, 0), 0.075, 0.58, dark)
 	_add_limb("LeftLeg", Vector3(-0.1, 0.48, 0), 0.09, 0.7, dark)
@@ -160,7 +193,7 @@ func _material(color: Color, rough: float) -> StandardMaterial3D:
 	mat.roughness = rough
 	return mat
 
-func _add_sphere(label: String, pos: Vector3, scale_value: Vector3, mat: Material) -> void:
+func _add_sphere(label: String, pos: Vector3, scale_value: Vector3, mat: Material) -> Node3D:
 	var node := MeshInstance3D.new()
 	node.name = label
 	var mesh := SphereMesh.new()
@@ -171,8 +204,9 @@ func _add_sphere(label: String, pos: Vector3, scale_value: Vector3, mat: Materia
 	node.scale = scale_value
 	node.material_override = mat
 	visual_root.add_child(node)
+	return node
 
-func _add_capsule(label: String, pos: Vector3, radius: float, height: float, mat: Material) -> void:
+func _add_capsule(label: String, pos: Vector3, radius: float, height: float, mat: Material) -> Node3D:
 	var node := MeshInstance3D.new()
 	node.name = label
 	var mesh := CapsuleMesh.new()
@@ -182,6 +216,7 @@ func _add_capsule(label: String, pos: Vector3, radius: float, height: float, mat
 	node.position = pos
 	node.material_override = mat
 	visual_root.add_child(node)
+	return node
 
 func _add_limb(label: String, pos: Vector3, radius: float, length: float, mat: Material) -> void:
 	var pivot := Node3D.new()
@@ -211,9 +246,11 @@ func _add_box(label: String, pos: Vector3, size_value: Vector3, mat: Material) -
 
 func _toggle_camera() -> void:
 	first_person = not first_person
-	camera.position = Vector3(0, 0.03, 0.02) if first_person else Vector3(0, 0.55, camera_distance)
+	var target_position := Vector3(0, 0.03, 0.02) if first_person else Vector3(0, 0.55, camera_distance)
+	camera.position = target_position
 	camera.fov = camera_fov
 	visual_root.visible = not first_person
+	camera_pivot.position.y = 1.55 if first_person else 1.55
 
 func _interact_nearest() -> void:
 	var nearest: Node3D
