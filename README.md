@@ -10,7 +10,8 @@ An original 3D mobile open-world adventure project built with Godot 4.4.1.
 - Procedural moving 3D cloud formations with layered silhouettes and slow atmospheric drift.
 - Filmic tone mapping, subtle glow and distance fog, with mobile-friendly quality scaling.
 - Four graphics presets: performance, balanced, high visual and cinematic maximum.
-- Custom 3D Stickman assembled from meshes, with a basic procedural walk cycle.
+- Custom 3D Stickman assembled from meshes, with procedural walk, sprint, airborne and landing poses.
+- Landscape-first mobile orientation and responsive wide-screen HUD/control layout.
 - First-person / third-person camera switching with free vertical and horizontal look.
 - Configurable look sensitivity, field of view, third-person camera distance and inverted vertical look.
 - Pause menu, settings panel, graphics quality presets, FPS caps and persistent local settings.
