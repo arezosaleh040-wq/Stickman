@@ -4,7 +4,9 @@ An original 3D mobile open-world adventure project built with Godot 4.4.1.
 
 ## Current prototype systems
 - Procedurally generated city blocks, roads, windows, a central plaza and an old clock tower.
-- Town trees, street lamps and a furnished starter townhouse interior.
+- Town trees with independently phased wind sway, animated leaf-cluster vertex motion, textured bark and layered foliage.
+- Procedural high-detail noise textures for terrain, asphalt, building plaster and plaza stone, with triplanar mapping for consistent surfaces.
+- Town street lamps and a furnished starter townhouse interior.
 - Working entrance and exit portals between the city and the townhouse.
 - Dynamic directional sunlight and a running world clock.
 - Procedural moving 3D cloud formations with layered silhouettes and slow atmospheric drift.
@@ -46,7 +48,7 @@ The project uses Godot's mobile GL Compatibility renderer. Android export config
 4. Complete jobs, shops, trading, crafting, inventory UI and balanced economy.
 5. Build a full story campaign, side quests, puzzles and progression.
 6. Add vehicles and transportation.
-7. Add weather, higher-quality original art, character animation, sound and music.
+7. Expand the procedural material library with authored PBR albedo/normal/roughness maps, improve foliage silhouettes and add weather, original art, sound and music.
 8. Profile performance on real Android devices, configure Android export, build APKs, test installation and prepare release signing.
 
 This repository contains an expanding prototype with connected starter gameplay systems. It is not yet the complete open-world game in the design brief. High-end production quality requires original art and animation, substantial content creation, iterative testing and mobile optimization.
