@@ -19,11 +19,17 @@ func interact() -> String:
 			GameState.add_experience(5)
 			return "You completed a quick city task: +25 coins."
 		"shop":
-			if GameState.money >= 50:
-				GameState.add_money(-50)
-				GameState.inventory["health_potion"] = int(GameState.inventory.get("health_potion", 0)) + 1
-				return "Purchased a supply item for 50 coins."
-			return "Not enough coins. You need 50."
+			var owns_cape := bool(GameState.inventory.get("cape_owned", false))
+			if not owns_cape:
+				if GameState.money < 120:
+					return "The travel cape costs 120 coins."
+				GameState.add_money(-120)
+				GameState.inventory["cape_owned"] = true
+				GameState.inventory["cape_equipped"] = true
+				return "CAPE PURCHASED AND EQUIPPED • Its cloth reacts to wind, running and jumps."
+			var cape_is_equipped := bool(GameState.inventory.get("cape_equipped", false))
+			GameState.inventory["cape_equipped"] = not cape_is_equipped
+			return "Travel cape equipped." if not cape_is_equipped else "Travel cape stored in your inventory."
 		"property":
 			if GameState.owned_properties.has(display_name):
 				return "You already own this property."
