@@ -8,7 +8,10 @@ An original 3D mobile open-world adventure project built with Godot 4.4.1.
 - Working entrance and exit portals between the city and the townhouse.
 - Dynamic directional sunlight and a running world clock.
 - Custom 3D Stickman assembled from meshes, with a basic procedural walk cycle.
-- First-person / third-person camera switching.
+- First-person / third-person camera switching with free vertical and horizontal look.
+- Configurable look sensitivity, field of view, third-person camera distance and inverted vertical look.
+- Pause menu, settings panel, graphics quality presets, FPS caps and persistent local settings.
+- Resizable touch controls with left-hand/right-hand layout selection.
 - Walking, sprinting, stamina, jumping, contextual wall jumps and obstacle vaults.
 - Touchscreen controls, right-side touch camera look, and desktop keyboard controls.
 - HUD with coins, XP, stamina, interaction prompts and world time.
@@ -22,6 +25,7 @@ An original 3D mobile open-world adventure project built with Godot 4.4.1.
 - Sprint: Shift
 - Jump: Space; press jump again in the air near an obstacle for a parkour move
 - Switch camera: V
+- Pause / settings: Escape or the on-screen MENU button
 - Interact: E
 - Save: F5
 - Load: F9
