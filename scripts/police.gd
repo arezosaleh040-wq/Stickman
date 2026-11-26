@@ -5,6 +5,7 @@ var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var escape_timer := 0.0
 var alert_flash := 0.0
 var siren_light: OmniLight3D
+const COURTHOUSE_RELEASE_POSITION := Vector3(34.0, 1.2, 9.0)
 
 func _ready() -> void:
 	add_to_group("city_police")
@@ -45,12 +46,14 @@ func _physics_process(delta: float) -> void:
 
 func _arrest_player(player: CharacterBody3D) -> void:
 	var fine := mini(30, GameState.cash_wallet)
+	# Fine comes from wallet cash only; bank balance and inventory are preserved.
 	GameState.add_cash(-fine)
 	GameState.set_wanted(0)
-	player.global_position = Vector3(0, 1.2, 10)
+	player.global_position = COURTHOUSE_RELEASE_POSITION
 	player.velocity = Vector3.ZERO
-	player.call("_show_message", "ARRESTED • $%d fine paid. You are back at the city station." % fine)
+	player.call("_show_message", "ARRESTED • COURTHOUSE RELEASE • $%d fine paid. Your items and progress are safe." % fine)
 	AudioManager.play_alert()
+	SaveSystem.save_game()
 	global_position = Vector3(-12, 0.1, -10)
 
 func _build_officer() -> void:
