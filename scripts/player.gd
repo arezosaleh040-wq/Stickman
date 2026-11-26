@@ -1,10 +1,11 @@
 extends CharacterBody3D
 
-@export var walk_speed := 5.2
-@export var sprint_speed := 8.4
-@export var jump_velocity := 5.6
+@export var walk_speed := 6.2
+@export var sprint_speed := 10.0
+@export var jump_velocity := 6.6
 @export var mouse_sensitivity := 0.0022
-@export var acceleration := 18.0
+@export var acceleration := 27.0
+@export var braking := 34.0
 
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera3D
@@ -50,6 +51,9 @@ var inventory_hotbar_buttons: Array[Button] = []
 var storage_buttons: Array[Button] = []
 
 func _ready() -> void:
+	floor_snap_length = 0.38
+	safe_margin = 0.035
+	max_slides = 8
 	add_to_group("player")
 	_add_input_actions()
 	_build_character()
@@ -102,8 +106,8 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, direction.x * target_speed, acceleration * delta)
 		velocity.z = move_toward(velocity.z, direction.z * target_speed, acceleration * delta)
 	else:
-		velocity.x = move_toward(velocity.x, 0.0, acceleration * delta)
-		velocity.z = move_toward(velocity.z, 0.0, acceleration * delta)
+		velocity.x = move_toward(velocity.x, 0.0, braking * delta)
+		velocity.z = move_toward(velocity.z, 0.0, braking * delta)
 	if Input.is_action_just_pressed("jump"):
 		if is_on_floor():
 			velocity.y = jump_velocity
