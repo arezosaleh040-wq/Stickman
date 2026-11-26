@@ -42,6 +42,7 @@ func _ready() -> void:
 	_set_loading_progress(62, "GENERATING THE CITY")
 	await get_tree().process_frame
 	_create_landmarks()
+	_create_courthouse()
 	_create_city_services()
 	_create_supermarket()
 	_create_residents()
@@ -740,6 +741,71 @@ func _create_landmarks() -> void:
 	tower_shape.size = Vector3(7, 18, 7)
 	tower_collision.shape = tower_shape
 	tower.add_child(tower_collision)
+
+func _create_courthouse() -> void:
+	var court := StaticBody3D.new()
+	court.name = "CityCourthouse"
+	court.position = Vector3(34.0, 0.0, -2.0)
+	add_child(court)
+	var stone := _mat(Color(0.67, 0.65, 0.59), 0.88)
+	var dark_stone := _mat(Color(0.28, 0.31, 0.34), 0.72)
+	var facade := MeshInstance3D.new()
+	var facade_mesh := BoxMesh.new()
+	facade_mesh.size = Vector3(18.0, 8.0, 3.0)
+	facade.mesh = facade_mesh
+	facade.position = Vector3(0, 4.0, 0)
+	facade.material_override = stone
+	court.add_child(facade)
+	var facade_collision := CollisionShape3D.new()
+	var facade_shape := BoxShape3D.new()
+	facade_shape.size = facade_mesh.size
+	facade_collision.shape = facade_shape
+	facade_collision.position = facade.position
+	court.add_child(facade_collision)
+	var roof := MeshInstance3D.new()
+	var roof_mesh := BoxMesh.new()
+	roof_mesh.size = Vector3(19.0, 0.55, 3.8)
+	roof.mesh = roof_mesh
+	roof.position = Vector3(0, 8.25, 0)
+	roof.material_override = dark_stone
+	court.add_child(roof)
+	for x in [-7.0, -3.5, 3.5, 7.0]:
+		var column := MeshInstance3D.new()
+		var column_mesh := CylinderMesh.new()
+		column_mesh.top_radius = 0.42
+		column_mesh.bottom_radius = 0.52
+		column_mesh.height = 6.8
+		column.mesh = column_mesh
+		column.position = Vector3(x, 3.45, 1.8)
+		column.material_override = stone
+		court.add_child(column)
+	var sign := Label3D.new()
+	sign.text = "CITY COURTHOUSE"
+	sign.font_size = 64
+	sign.pixel_size = 0.012
+	sign.position = Vector3(0, 6.4, 1.62)
+	sign.modulate = Color(0.08, 0.18, 0.25)
+	court.add_child(sign)
+	var entrance := StaticBody3D.new()
+	entrance.name = "CourthouseReleasePoint"
+	entrance.set_script(INTERACTABLE_SCRIPT)
+	entrance.set("display_name", "Courthouse Entrance")
+	entrance.set("description", "The courthouse is where the police bring you after an arrest.")
+	entrance.set("interaction_type", "courthouse")
+	entrance.position = Vector3(34.0, 0.9, 7.0)
+	add_child(entrance)
+	var marker := MeshInstance3D.new()
+	var marker_mesh := BoxMesh.new()
+	marker_mesh.size = Vector3(2.4, 0.08, 1.0)
+	marker.mesh = marker_mesh
+	marker.position.y = -0.82
+	marker.material_override = _mat(Color(0.08, 0.55, 0.72), 0.35)
+	entrance.add_child(marker)
+	var entrance_collision := CollisionShape3D.new()
+	var entrance_shape := BoxShape3D.new()
+	entrance_shape.size = Vector3(2.8, 2.0, 2.0)
+	entrance_collision.shape = entrance_shape
+	entrance.add_child(entrance_collision)
 
 func _create_city_services() -> void:
 	_spawn_service("Mission Board", "Find your first city mission.", "mission", Vector3(3.5, 0.9, 3.5), Color(0.18, 0.55, 0.78))
