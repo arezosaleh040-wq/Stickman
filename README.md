@@ -3,7 +3,8 @@
 An original 3D mobile open-world adventure project built with Godot 4.4.1.
 
 ## Current prototype systems
-- Procedurally generated city blocks, roads, windows, a central plaza and an old clock tower.
+- Cinematic illustrated startup/loading screen with staged progress, then a real main menu with Play, Continue, graphics settings and Exit before gameplay begins.
+- A procedural asphalt street grid through the districts, raised sidewalks, curb strips and painted crosswalks around the main junction.
 - Town trees with independently phased wind sway, animated leaf-cluster vertex motion, textured bark and layered foliage.
 - Procedural high-detail noise textures for terrain, asphalt, building plaster and plaza stone, with triplanar mapping for consistent surfaces.
 - Procedurally modeled birds with individual flight orbits, body banking and continuously flapping wings over the central district; the current birds are lightweight game meshes, not scanned or photorealistic animal assets.
@@ -11,6 +12,9 @@ An original 3D mobile open-world adventure project built with Godot 4.4.1.
 - Two collision-backed rolling terrain mounds with smoothly sampled height meshes and scattered rock formations for real elevation changes beyond the staircases.
 - A purchasable travel cape at the Supply Shop; its subdivided cloth mesh ripples with wind, sprint speed and airborne movement, and can be equipped or stored. This is a lightweight shader-driven cloth effect, not a full cloth-physics simulation.
 - Shoes are parented to the leg pivots so the feet follow the procedural walk/run cycle.
+- Eight moving traffic cars with separate paint colors, glass cabins, rolling wheels, lights and collision bodies; cars follow lanes and stop at the signal cycle.
+- Four traffic-light posts with glowing red, amber and green lenses, synchronized signal phases and pedestrian crossing markings.
+- Ten stylized humanoid residents with clothing colors, hair, hands, shoes and simple opposing arm/leg walk cycles; their wandering is kept near sidewalk areas.
 - Town street lamps and a furnished starter townhouse interior.
 - Working entrance and exit portals between the city and the townhouse.
 - Dynamic directional sunlight and a running world clock.
@@ -28,7 +32,7 @@ An original 3D mobile open-world adventure project built with Godot 4.4.1.
 - HUD with coins, XP, stamina, interaction prompts and world time.
 - Starter economy, inventory data, mission state and property ownership data.
 - Interactable mission board, job office, supply shop and purchasable townhouse.
-- Six wandering residents with dialogue and basic movement AI.
+- Ten wandering residents with dialogue and basic movement AI.
 - Local save/load system using the device's user data directory.
 
 ## Controls
