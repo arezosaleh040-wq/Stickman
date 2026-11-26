@@ -1,0 +1,62 @@
+name: Android APK Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "**.gd"
+      - "**.tscn"
+      - "**.tres"
+      - "project.godot"
+      - "export_presets.cfg"
+      - ".github/workflows/android-apk.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0" "cmdline-tools;latest"
+
+      - name: Set up Godot and matching export templates
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.4.1
+          use-dotnet: false
+          include-templates: true
+
+      - name: Import project resources
+        run: godot --headless --editor --path . --quit
+
+      - name: Validate project scene
+        run: godot --headless --path . --quit-after 5
+
+      - name: Export Android debug APK
+        run: |
+          mkdir -p build
+          godot --headless --path . --export-debug "Android" build/STICKMAN-SHADOW-WORLD-debug.apk
+
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: STICKMAN-SHADOW-WORLD-Android-debug
+          path: build/STICKMAN-SHADOW-WORLD-debug.apk
+          if-no-files-found: error
+          retention-days: 14
