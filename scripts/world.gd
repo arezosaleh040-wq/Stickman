@@ -5,9 +5,11 @@ const INTERACTABLE_SCRIPT = preload("res://scripts/interactable.gd")
 var day_clock := 0.22
 var sun: DirectionalLight3D
 var clock_label: Label
+var cloud_layers: Array[Node3D] = []
 
 func _ready() -> void:
 	_create_environment()
+	_create_cloud_layers()
 	_create_ground()
 	_create_roads()
 	_create_city_decor()
@@ -21,6 +23,10 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	day_clock = fposmod(day_clock + delta * 0.0007, 1.0)
+	for cloud in cloud_layers:
+		cloud.position.x += delta * float(cloud.get_meta("drift_speed", 0.7))
+		if cloud.position.x > 145.0:
+			cloud.position.x = -145.0
 	if sun:
 		var angle := day_clock * TAU
 		sun.rotation_degrees.x = -rad_to_deg(angle) + 90.0
@@ -45,7 +51,15 @@ func _create_environment() -> void:
 	environment.ambient_light_color = Color(0.68, 0.75, 0.92)
 	environment.ambient_light_energy = 0.62
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	environment.glow_enabled = true
+	environment.glow_intensity = 0.32
+	environment.glow_strength = 0.72
+	environment.fog_enabled = true
+	environment.fog_light_color = Color(0.55, 0.64, 0.78)
+	environment.fog_density = 0.0014
+	environment.fog_sky_affect = 0.28
 	world_env.environment = environment
+	world_env.add_to_group("world_environment")
 	add_child(world_env)
 	sun = DirectionalLight3D.new()
 	sun.name = "DynamicSun"
@@ -54,6 +68,37 @@ func _create_environment() -> void:
 	sun.shadow_enabled = true
 	sun.directional_shadow_max_distance = 65.0
 	add_child(sun)
+
+
+func _create_cloud_layers() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 881204
+	var cloud_material := StandardMaterial3D.new()
+	cloud_material.albedo_color = Color(0.91, 0.94, 1.0, 0.84)
+	cloud_material.roughness = 1.0
+	cloud_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	cloud_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	for cloud_index in range(12):
+		var cloud := Node3D.new()
+		cloud.name = "DynamicCloud_%02d" % cloud_index
+		cloud.position = Vector3(rng.randf_range(-135.0, 135.0), rng.randf_range(34.0, 48.0), rng.randf_range(-125.0, 125.0))
+		cloud.set_meta("drift_speed", rng.randf_range(0.35, 0.95))
+		cloud.add_to_group("world_clouds")
+		if cloud_index >= 6:
+			cloud.add_to_group("world_clouds_cinematic")
+		add_child(cloud)
+		cloud_layers.append(cloud)
+		var puff_count := rng.randi_range(6, 10)
+		for puff_index in range(puff_count):
+			var puff := MeshInstance3D.new()
+			var puff_mesh := SphereMesh.new()
+			puff_mesh.radius = 1.0
+			puff_mesh.height = 1.7
+			puff.mesh = puff_mesh
+			puff.position = Vector3(rng.randf_range(-5.0, 5.0), rng.randf_range(-0.65, 0.65), rng.randf_range(-2.4, 2.4))
+			puff.scale = Vector3(rng.randf_range(2.1, 4.0), rng.randf_range(0.55, 1.05), rng.randf_range(1.7, 3.1))
+			puff.material_override = cloud_material
+			cloud.add_child(puff)
 
 func _create_ground() -> void:
 	var ground := StaticBody3D.new()
