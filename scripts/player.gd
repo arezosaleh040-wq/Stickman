@@ -20,6 +20,8 @@ var hud_label: Label
 var prompt_label: Label
 var message_label: Label
 var message_timer := 0.0
+var parkour_cooldown := 0.0
+var is_vaulting := false
 
 func _ready() -> void:
 	add_to_group("player")
@@ -56,6 +58,7 @@ func _rotate_camera(relative: Vector2) -> void:
 	camera_pivot.rotation.x = clamp(camera_pivot.rotation.x, -1.1, 1.1)
 
 func _physics_process(delta: float) -> void:
+	parkour_cooldown = maxf(0.0, parkour_cooldown - delta)
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	var input_vector := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
@@ -69,8 +72,11 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, acceleration * delta)
 		velocity.z = move_toward(velocity.z, 0.0, acceleration * delta)
-	if Input.is_action_just_pressed("jump") and is_on_floor():
-		velocity.y = jump_velocity
+	if Input.is_action_just_pressed("jump"):
+		if is_on_floor():
+			velocity.y = jump_velocity
+		else:
+			_try_parkour_jump(direction)
 	move_and_slide()
 	_animate_character(delta, input_vector.length() > 0.1)
 	_update_interaction_prompt()
@@ -80,6 +86,32 @@ func _physics_process(delta: float) -> void:
 			message_label.text = ""
 	if hud_label:
 		hud_label.text = "STICKMAN  •  COINS %d  •  XP %d  •  STAMINA %d%%" % [GameState.money, GameState.experience, int(stamina)]
+
+func _try_parkour_jump(direction: Vector3) -> void:
+	if parkour_cooldown > 0.0 or stamina < 12.0:
+		return
+	var space := get_world_3d().direct_space_state
+	var forward := -global_transform.basis.z
+	var wall_query := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.95, global_position + Vector3.UP * 0.95 + forward * 1.15)
+	wall_query.exclude = [self]
+	var wall_hit := space.intersect_ray(wall_query)
+	if wall_hit.is_empty():
+		return
+	var top_query := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 2.0 + forward * 0.85, global_position + Vector3.UP * 0.35 + forward * 0.85)
+	top_query.exclude = [self]
+	var top_hit := space.intersect_ray(top_query)
+	if not top_hit.is_empty():
+		# A wall jump pushes the character away from the obstacle.
+		velocity.y = 6.4
+		velocity += wall_hit.normal * 3.0
+		_show_message("WALL JUMP")
+	else:
+		# A clear ledge lets the character vault over low obstacles.
+		velocity.y = 5.2
+		velocity += forward * 3.2
+		_show_message("PARKOUR VAULT")
+	stamina = maxf(0.0, stamina - 12.0)
+	parkour_cooldown = 0.55
 
 func _animate_character(delta: float, moving: bool) -> void:
 	if moving:
