@@ -169,9 +169,9 @@ func _create_city_services() -> void:
 func _spawn_service(title: String, info: String, kind: String, pos: Vector3, tint: Color) -> void:
 	var item := StaticBody3D.new()
 	item.set_script(INTERACTABLE_SCRIPT)
-	item.display_name = title
-	item.description = info
-	item.interaction_type = kind
+	item.set("display_name", title)
+	item.set("description", info)
+	item.set("interaction_type", kind)
 	item.position = pos
 	add_child(item)
 	var mesh := MeshInstance3D.new()
