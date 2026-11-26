@@ -346,6 +346,9 @@ func _set_loading_progress(value: float, message: String) -> void:
 func _show_main_menu() -> void:
 	get_tree().paused = true
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	var loading_center := menu_root.get_node_or_null("LoadingCenter")
+	if loading_center:
+		loading_center.queue_free()
 	loading_label.visible = false
 	loading_bar.visible = false
 	var center := CenterContainer.new()
@@ -445,6 +448,7 @@ func _start_game() -> void:
 
 func _create_traffic_system() -> void:
 	_create_city_streets()
+	_create_crosswalks()
 	_create_traffic_lights()
 	for axis in ["x","z"]:
 		for direction in [-1,1]:
@@ -489,6 +493,15 @@ func _glow_material(color: Color) -> StandardMaterial3D:
 	material.emission_energy_multiplier = 3.5
 	material.roughness = 0.25
 	return material
+
+
+func _create_crosswalks() -> void:
+	var paint := _mat(Color(0.88,0.89,0.86),0.78)
+	for side in [-1.0,1.0]:
+		for stripe_index in range(7):
+			var offset := -4.2+float(stripe_index)*1.4
+			_add_road_surface(Vector3(offset,0.105,side*7.0),Vector3(0.82,0.025,2.6),paint,"CrosswalkX_%d_%d"%[int(side),stripe_index])
+			_add_road_surface(Vector3(side*7.0,0.105,offset),Vector3(2.6,0.025,0.82),paint,"CrosswalkZ_%d_%d"%[int(side),stripe_index])
 
 
 func _create_traffic_lights() -> void:
