@@ -6,9 +6,10 @@ An original 3D mobile open-world adventure project built with Godot 4.4.1.
 - Procedurally generated city blocks, roads, windows, a central plaza and an old clock tower.
 - Town trees with independently phased wind sway, animated leaf-cluster vertex motion, textured bark and layered foliage.
 - Procedural high-detail noise textures for terrain, asphalt, building plaster and plaza stone, with triplanar mapping for consistent surfaces.
-- Animated low-poly birds with individual flight orbits, body banking and continuously flapping wings over the central district.
+- Procedurally modeled birds with individual flight orbits, body banking and continuously flapping wings over the central district; the current birds are lightweight game meshes, not scanned or photorealistic animal assets.
 - Two detailed stone staircases with step collision, edge trims, handrails, raised landings and adjacent walkable ramps.
-- A purchasable travel cape at the Supply Shop; its subdivided cloth mesh ripples with wind, sprint speed and airborne movement, and can be equipped or stored.
+- Two collision-backed rolling terrain mounds with smoothly sampled height meshes and scattered rock formations for real elevation changes beyond the staircases.
+- A purchasable travel cape at the Supply Shop; its subdivided cloth mesh ripples with wind, sprint speed and airborne movement, and can be equipped or stored. This is a lightweight shader-driven cloth effect, not a full cloth-physics simulation.
 - Shoes are parented to the leg pivots so the feet follow the procedural walk/run cycle.
 - Town street lamps and a furnished starter townhouse interior.
 - Working entrance and exit portals between the city and the townhouse.
