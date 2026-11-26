@@ -28,15 +28,25 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
+      - name: Set up Android command-line tools
         uses: android-actions/setup-android@v3
         with:
           cmdline-tools-version: "latest"
           accept-android-sdk-licenses: true
-          packages: |
-            platform-tools
-            platforms;android-35
-            build-tools;35.0.0
+
+      - name: Install Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          if [[ -z "$SDK_ROOT" ]]; then
+            echo "Android SDK path is not configured."
+            exit 1
+          fi
+          sdkmanager --sdk_root="$SDK_ROOT" --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Set up Godot and matching export templates
         uses: chickensoft-games/setup-godot@v2
@@ -53,11 +63,16 @@ jobs:
 
       - name: Export Android debug APK
         run: |
+          set -euo pipefail
           mkdir -p build
           godot --headless --path . --export-debug "Android" build/STICKMAN-SHADOW-WORLD-debug.apk
 
       - name: Verify APK exists
-        run: test -s build/STICKMAN-SHADOW-WORLD-debug.apk
+        run: |
+          set -euo pipefail
+          test -s build/STICKMAN-SHADOW-WORLD-debug.apk
+          file build/STICKMAN-SHADOW-WORLD-debug.apk
+          ls -lh build/STICKMAN-SHADOW-WORLD-debug.apk
 
       - name: Upload installable debug APK
         uses: actions/upload-artifact@v4
