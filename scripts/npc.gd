@@ -24,9 +24,20 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
+	var player := get_tree().get_first_node_in_group("player") as Node3D
+	var fleeing := false
+	if GameState.wanted_level > 0 and player != null and global_position.distance_to(player.global_position) < 22.0:
+		var away := global_position - player.global_position
+		away.y = 0.0
+		if away.length_squared() < 0.01:
+			away = Vector3.RIGHT
+		target_position = global_position + away.normalized() * 9.0
+		wait_time = 0.0
+		fleeing = true
 	var flat_target := target_position - global_position
 	flat_target.y = 0.0
-	if wait_time > 0.0:
+	var current_speed := move_speed * (2.15 if fleeing else 1.0)
+	if wait_time > 0.0 and not fleeing:
 		wait_time -= delta
 		velocity.x = move_toward(velocity.x, 0.0, 4.0 * delta)
 		velocity.z = move_toward(velocity.z, 0.0, 4.0 * delta)
@@ -34,15 +45,15 @@ func _physics_process(delta: float) -> void:
 		_choose_destination()
 	else:
 		var direction := flat_target.normalized()
-		velocity.x = move_toward(velocity.x, direction.x * move_speed, 3.0 * delta)
-		velocity.z = move_toward(velocity.z, direction.z * move_speed, 3.0 * delta)
+		velocity.x = move_toward(velocity.x, direction.x * current_speed, (5.5 if fleeing else 3.0) * delta)
+		velocity.z = move_toward(velocity.z, direction.z * current_speed, (5.5 if fleeing else 3.0) * delta)
 		if body_mesh:
 			look_at(global_position + direction, Vector3.UP)
 	move_and_slide()
 	var movement_speed := Vector2(velocity.x, velocity.z).length()
 	if movement_speed > 0.12:
-		walk_clock += delta * 8.0
-	var swing := sin(walk_clock) * clampf(movement_speed / maxf(move_speed, 0.1), 0.0, 1.0) * 0.48
+		walk_clock += delta * (11.0 if fleeing else 8.0)
+	var swing := sin(walk_clock) * clampf(movement_speed / maxf(move_speed, 0.1), 0.0, 1.35) * 0.48
 	for index in range(arm_pivots.size()):
 		arm_pivots[index].rotation.x = swing if index == 0 else -swing
 	for index in range(leg_pivots.size()):
