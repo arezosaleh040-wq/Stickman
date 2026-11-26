@@ -47,7 +47,9 @@ jobs:
           sdkmanager --sdk_root="$SDK_ROOT" --install \
             "platform-tools" \
             "platforms;android-35" \
-            "build-tools;35.0.0"
+            "build-tools;35.0.0" \
+            "ndk;23.2.8568313" \
+            "cmake;3.10.2.4988404"
 
       - name: Set up Godot and matching export templates
         uses: chickensoft-games/setup-godot@v2
