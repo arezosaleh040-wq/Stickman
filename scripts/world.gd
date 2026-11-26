@@ -1196,7 +1196,7 @@ func _create_flying_birds() -> void:
 		head.material_override = feather_material
 		bird.add_child(head)
 		var beak := MeshInstance3D.new()
-		var beak_mesh := ConeMesh.new()
+		var beak_mesh := CylinderMesh.new()
 		beak_mesh.top_radius = 0.0
 		beak_mesh.bottom_radius = 0.035
 		beak_mesh.height = 0.12
