@@ -2,10 +2,14 @@
 config_version=5
 
 [application]
-config/name="STICKMAN"
+config/name="STICKMAN: SHADOW WORLD"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.4", "GL Compatibility")
-config/description="Original 3D mobile adventure prototype"
+config/description="Original 3D open-world mobile adventure"
+
+[autoload]
+GameState="*res://scripts/game_state.gd"
+SaveSystem="*res://scripts/save_system.gd"
 
 [display]
 window/size/viewport_width=1280
