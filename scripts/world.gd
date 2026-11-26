@@ -63,6 +63,7 @@ func _create_environment() -> void:
 	add_child(world_env)
 	sun = DirectionalLight3D.new()
 	sun.name = "DynamicSun"
+	sun.add_to_group("world_sun")
 	sun.rotation_degrees = Vector3(-38, -28, 0)
 	sun.light_energy = 1.25
 	sun.shadow_enabled = true
