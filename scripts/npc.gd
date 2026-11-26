@@ -2,8 +2,8 @@ extends CharacterBody3D
 
 @export var display_name := "Town Resident"
 @export var dialogue := "Welcome to the old town. There is always something to discover."
-@export var wander_radius := 9.0
-@export var move_speed := 1.25
+@export var wander_radius := 105.0
+@export var move_speed := 1.65
 
 var home_position := Vector3.ZERO
 var target_position := Vector3.ZERO
@@ -13,11 +13,15 @@ var arm_pivots: Array[Node3D] = []
 var leg_pivots: Array[Node3D] = []
 var walk_clock := 0.0
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
+var stuck_time := 0.0
+var previous_position := Vector3.ZERO
 
 func _ready() -> void:
 	add_to_group("interactables")
+	floor_snap_length = 0.3
+	safe_margin = 0.04
 	home_position = global_position
-	target_position = home_position
+	previous_position = global_position
 	_build_appearance()
 	_choose_destination()
 
@@ -31,42 +35,72 @@ func _physics_process(delta: float) -> void:
 		away.y = 0.0
 		if away.length_squared() < 0.01:
 			away = Vector3.RIGHT
-		target_position = global_position + away.normalized() * 9.0
+		target_position = global_position + away.normalized() * 12.0
 		wait_time = 0.0
 		fleeing = true
+
 	var flat_target := target_position - global_position
 	flat_target.y = 0.0
-	var current_speed := move_speed * (2.15 if fleeing else 1.0)
+	var current_speed := move_speed * (2.0 if fleeing else 1.0)
 	if wait_time > 0.0 and not fleeing:
-		wait_time -= delta
-		velocity.x = move_toward(velocity.x, 0.0, 4.0 * delta)
-		velocity.z = move_toward(velocity.z, 0.0, 4.0 * delta)
-	elif flat_target.length() < 0.7:
+		wait_time = maxf(0.0, wait_time - delta)
+		velocity.x = move_toward(velocity.x, 0.0, 8.0 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, 8.0 * delta)
+	elif flat_target.length() < 1.0:
 		_choose_destination()
 	else:
 		var direction := flat_target.normalized()
-		velocity.x = move_toward(velocity.x, direction.x * current_speed, (5.5 if fleeing else 3.0) * delta)
-		velocity.z = move_toward(velocity.z, direction.z * current_speed, (5.5 if fleeing else 3.0) * delta)
-		if body_mesh:
-			look_at(global_position + direction, Vector3.UP)
+		velocity.x = move_toward(velocity.x, direction.x * current_speed, 8.0 * delta)
+		velocity.z = move_toward(velocity.z, direction.z * current_speed, 8.0 * delta)
+		look_at(global_position + direction, Vector3.UP)
 	move_and_slide()
+
+	_wrap_world_edges()
+	var moved_distance := global_position.distance_to(previous_position)
+	if moved_distance < 0.015 and flat_target.length() > 1.2 and wait_time <= 0.0:
+		stuck_time += delta
+	else:
+		stuck_time = 0.0
+	if stuck_time > 1.4:
+		_choose_destination()
+		stuck_time = 0.0
+	previous_position = global_position
+
 	var movement_speed := Vector2(velocity.x, velocity.z).length()
 	if movement_speed > 0.12:
-		walk_clock += delta * (11.0 if fleeing else 8.0)
+		walk_clock += delta * (12.0 if fleeing else 10.0)
 	var swing := sin(walk_clock) * clampf(movement_speed / maxf(move_speed, 0.1), 0.0, 1.35) * 0.48
 	for index in range(arm_pivots.size()):
 		arm_pivots[index].rotation.x = swing if index == 0 else -swing
 	for index in range(leg_pivots.size()):
 		leg_pivots[index].rotation.x = -swing if index == 0 else swing
 
+func _wrap_world_edges() -> void:
+	var wrapped := global_position
+	var changed := false
+	if wrapped.x > 112.0:
+		wrapped.x = -112.0
+		changed = true
+	elif wrapped.x < -112.0:
+		wrapped.x = 112.0
+		changed = true
+	if wrapped.z > 112.0:
+		wrapped.z = -112.0
+		changed = true
+	elif wrapped.z < -112.0:
+		wrapped.z = 112.0
+		changed = true
+	if changed:
+		global_position = wrapped
+		_choose_destination()
+
 func interact() -> String:
 	return display_name + ": " + dialogue
 
 func _choose_destination() -> void:
-	var angle := randf() * TAU
-	var distance := randf_range(0.35, maxf(0.4, wander_radius))
-	target_position = home_position + Vector3(cos(angle) * distance, 0, sin(angle) * distance)
-	wait_time = randf_range(1.0, 3.0)
+	var edge := minf(wander_radius, 106.0)
+	target_position = Vector3(randf_range(-edge, edge), global_position.y, randf_range(-edge, edge))
+	wait_time = randf_range(0.15, 0.75)
 
 func _build_appearance() -> void:
 	var outfit_colors := [Color(0.12,0.36,0.62),Color(0.56,0.22,0.16),Color(0.18,0.43,0.31),Color(0.42,0.30,0.52),Color(0.68,0.48,0.19)]
