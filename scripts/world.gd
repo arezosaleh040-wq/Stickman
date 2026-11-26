@@ -6,9 +6,17 @@ var day_clock := 0.22
 var sun: DirectionalLight3D
 var clock_label: Label
 var cloud_layers: Array[Node3D] = []
+var wind_trees: Array[Node3D] = []
+var terrain_material: StandardMaterial3D
+var asphalt_material: StandardMaterial3D
+var bark_material: StandardMaterial3D
+var plaster_material: StandardMaterial3D
+var stone_material: StandardMaterial3D
+var leaf_shader: Shader
 
 func _ready() -> void:
 	_create_environment()
+	_create_surface_materials()
 	_create_cloud_layers()
 	_create_ground()
 	_create_roads()
@@ -27,6 +35,12 @@ func _process(delta: float) -> void:
 		cloud.position.x += delta * float(cloud.get_meta("drift_speed", 0.7))
 		if cloud.position.x > 145.0:
 			cloud.position.x = -145.0
+	var wind_time := Time.get_ticks_msec() * 0.001
+	for tree in wind_trees:
+		var phase := float(tree.get_meta("wind_phase", 0.0))
+		var strength := float(tree.get_meta("wind_strength", 1.0))
+		tree.rotation.z = sin(wind_time * 0.72 + phase) * 0.012 * strength
+		tree.rotation.x = cos(wind_time * 0.57 + phase * 1.4) * 0.008 * strength
 	if sun:
 		var angle := day_clock * TAU
 		sun.rotation_degrees.x = -rad_to_deg(angle) + 90.0
@@ -34,6 +48,61 @@ func _process(delta: float) -> void:
 	if clock_label:
 		var hour := int(day_clock * 24.0)
 		clock_label.text = "WORLD TIME  %02d:%02d" % [hour, int(fposmod(day_clock * 1440.0, 60.0))]
+
+func _create_surface_materials() -> void:
+	terrain_material = _noise_material(Color(0.34, 0.43, 0.29), 0.98, 0.055, 5, 512)
+	asphalt_material = _noise_material(Color(0.19, 0.21, 0.23), 0.96, 0.12, 3, 512)
+	bark_material = _noise_material(Color(0.34, 0.20, 0.11), 1.0, 0.19, 4, 256)
+	plaster_material = _noise_material(Color(0.66, 0.57, 0.43), 0.92, 0.085, 4, 512)
+	stone_material = _noise_material(Color(0.43, 0.41, 0.37), 0.94, 0.14, 4, 512)
+	leaf_shader = Shader.new()
+	leaf_shader.code = """
+shader_type spatial;
+render_mode cull_back;
+uniform vec4 leaf_tint : source_color = vec4(0.13, 0.34, 0.18, 1.0);
+uniform float wind_strength = 0.09;
+uniform float wind_phase = 0.0;
+void vertex() {
+	float height_weight = clamp(VERTEX.y * 0.8 + 0.35, 0.0, 1.0);
+	float gust = sin(TIME * 1.25 + wind_phase + VERTEX.y * 1.7);
+	float cross_gust = cos(TIME * 0.82 + wind_phase * 1.6 + VERTEX.x);
+	VERTEX.x += gust * wind_strength * height_weight;
+	VERTEX.z += cross_gust * wind_strength * 0.34 * height_weight;
+}
+void fragment() {
+	float leaf_variation = 0.91 + 0.07 * sin(UV.x * 31.0 + UV.y * 17.0) * cos(UV.y * 23.0);
+	ALBEDO = leaf_tint.rgb * leaf_variation;
+	ROUGHNESS = 0.94;
+}
+"""
+
+func _noise_material(tint: Color, roughness_value: float, frequency: float, octaves: int, resolution: int) -> StandardMaterial3D:
+	var noise := FastNoiseLite.new()
+	noise.noise_type = FastNoiseLite.TYPE_SIMPLEX
+	noise.frequency = frequency
+	noise.fractal_octaves = octaves
+	noise.fractal_gain = 0.52
+	var texture := NoiseTexture2D.new()
+	texture.noise = noise
+	texture.width = resolution
+	texture.height = resolution
+	texture.seamless = true
+	texture.generate_mipmaps = true
+	var material := StandardMaterial3D.new()
+	material.albedo_color = tint
+	material.albedo_texture = texture
+	material.roughness = roughness_value
+	material.uv1_triplanar = true
+	material.uv1_scale = Vector3(1.8, 1.8, 1.8)
+	return material
+
+func _leaf_material(tint: Color, phase: float, strength: float) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = leaf_shader
+	material.set_shader_parameter("leaf_tint", tint)
+	material.set_shader_parameter("wind_phase", phase)
+	material.set_shader_parameter("wind_strength", strength)
+	return material
 
 func _create_environment() -> void:
 	var world_env := WorldEnvironment.new()
@@ -109,7 +178,7 @@ func _create_ground() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(240, 240)
 	mesh.mesh = plane
-	mesh.material_override = _mat(Color(0.16, 0.21, 0.18), 1.0)
+	mesh.material_override = terrain_material
 	ground.add_child(mesh)
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
@@ -119,7 +188,7 @@ func _create_ground() -> void:
 	ground.add_child(collision)
 
 func _create_roads() -> void:
-	var road_mat := _mat(Color(0.075, 0.085, 0.095), 0.96)
+	var road_mat: Material = asphalt_material
 	var line_mat := _mat(Color(0.88, 0.72, 0.36), 0.8)
 	for axis in [-1, 1]:
 		var road := MeshInstance3D.new()
@@ -156,7 +225,7 @@ func _create_town() -> void:
 			var box_mesh := BoxMesh.new()
 			box_mesh.size = Vector3(width, height, depth)
 			facade.mesh = box_mesh
-			facade.material_override = _mat(Color(rng.randf_range(0.31,0.58),rng.randf_range(0.27,0.45),rng.randf_range(0.2,0.34)),0.88)
+			facade.material_override = plaster_material
 			building.add_child(facade)
 			var roof := MeshInstance3D.new()
 			var roof_mesh := BoxMesh.new()
@@ -191,7 +260,7 @@ func _create_landmarks() -> void:
 	plaza_mesh.size = Vector3(25, 0.18, 25)
 	plaza.mesh = plaza_mesh
 	plaza.position = Vector3(0, 0.12, 0)
-	plaza.material_override = _mat(Color(0.36, 0.34, 0.3), 0.95)
+	plaza.material_override = stone_material
 	add_child(plaza)
 	var tower := StaticBody3D.new()
 	tower.name = "OldClockTower"
@@ -201,7 +270,7 @@ func _create_landmarks() -> void:
 	var tower_box := BoxMesh.new()
 	tower_box.size = Vector3(7, 18, 7)
 	tower_mesh.mesh = tower_box
-	tower_mesh.material_override = _mat(Color(0.34, 0.3, 0.25), 0.9)
+	tower_mesh.material_override = stone_material
 	tower.add_child(tower_mesh)
 	var tower_collision := CollisionShape3D.new()
 	var tower_shape := BoxShape3D.new()
@@ -340,26 +409,61 @@ func _create_residents() -> void:
 		add_child(npc)
 
 func _create_city_decor() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 70261
 	for i in range(-5, 6):
 		for side in [-1, 1]:
 			var tree_position := Vector3(float(i) * 18.0, 0.0, float(side) * 32.0)
+			var tree := Node3D.new()
+			tree.name = "WindTree_%02d_%d" % [i + 5, side]
+			tree.position = tree_position
+			tree.set_meta("wind_phase", rng.randf_range(0.0, TAU))
+			tree.set_meta("wind_strength", rng.randf_range(0.72, 1.28))
+			tree.add_to_group("wind_trees")
+			add_child(tree)
+			wind_trees.append(tree)
+
 			var trunk := MeshInstance3D.new()
 			var trunk_mesh := CylinderMesh.new()
-			trunk_mesh.top_radius = 0.22
-			trunk_mesh.bottom_radius = 0.32
-			trunk_mesh.height = 2.2
+			trunk_mesh.top_radius = 0.19
+			trunk_mesh.bottom_radius = 0.31
+			trunk_mesh.height = 2.25
+			trunk_mesh.radial_segments = 10
 			trunk.mesh = trunk_mesh
-			trunk.position = tree_position + Vector3.UP * 1.1
-			trunk.material_override = _mat(Color(0.28, 0.16, 0.09), 0.95)
-			add_child(trunk)
-			var crown := MeshInstance3D.new()
-			var crown_mesh := SphereMesh.new()
-			crown_mesh.radius = 1.25
-			crown_mesh.height = 2.4
-			crown.mesh = crown_mesh
-			crown.position = tree_position + Vector3.UP * 2.8
-			crown.material_override = _mat(Color(0.12, 0.32, 0.19), 0.9)
-			add_child(crown)
+			trunk.position.y = 1.12
+			trunk.material_override = bark_material
+			tree.add_child(trunk)
+
+			for branch_side in [-1, 1]:
+				var branch := MeshInstance3D.new()
+				var branch_mesh := CylinderMesh.new()
+				branch_mesh.top_radius = 0.065
+				branch_mesh.bottom_radius = 0.12
+				branch_mesh.height = 1.05
+				branch.mesh = branch_mesh
+				branch.position = Vector3(float(branch_side) * 0.34, 1.85, 0.0)
+				branch.rotation.z = -float(branch_side) * 0.72
+				branch.material_override = bark_material
+				tree.add_child(branch)
+
+			var crown_specs := [
+				[Vector3(0.0, 2.95, 0.0), 1.22, 2.25, Color(0.13, 0.34, 0.18)],
+				[Vector3(-0.72, 2.72, 0.08), 0.78, 1.48, Color(0.16, 0.39, 0.20)],
+				[Vector3(0.72, 2.76, -0.06), 0.82, 1.52, Color(0.11, 0.30, 0.16)],
+				[Vector3(0.0, 3.48, -0.22), 0.76, 1.42, Color(0.19, 0.40, 0.21)]
+			]
+			for crown_index in range(crown_specs.size()):
+				var spec: Array = crown_specs[crown_index]
+				var crown := MeshInstance3D.new()
+				var crown_mesh := SphereMesh.new()
+				crown_mesh.radius = float(spec[1])
+				crown_mesh.height = float(spec[2])
+				crown_mesh.radial_segments = 12
+				crown_mesh.rings = 8
+				crown.mesh = crown_mesh
+				crown.position = spec[0]
+				crown.material_override = _leaf_material(spec[3], rng.randf_range(0.0, TAU), rng.randf_range(0.055, 0.105))
+				tree.add_child(crown)
 	for i in range(-4, 5):
 		for side in [-1, 1]:
 			var lamp := MeshInstance3D.new()
