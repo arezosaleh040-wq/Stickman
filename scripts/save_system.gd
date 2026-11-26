@@ -13,7 +13,7 @@ func _process(delta: float) -> void:
 		save_game()
 
 func _notification(what: int) -> void:
-	if what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_PREDELETE:
+	if (what == NOTIFICATION_WM_CLOSE_REQUEST or what == NOTIFICATION_APPLICATION_PAUSED or what == NOTIFICATION_PREDELETE) and is_inside_tree():
 		save_game()
 
 func save_game() -> bool:
@@ -44,5 +44,7 @@ func has_save() -> bool:
 	return FileAccess.file_exists(SAVE_PATH)
 
 func _player_position() -> Vector3:
+	if not is_inside_tree():
+		return Vector3.ZERO
 	var player := get_tree().get_first_node_in_group("player")
 	return player.global_position if player else Vector3.ZERO
