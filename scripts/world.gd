@@ -1,6 +1,7 @@
 extends Node3D
 
 const PLAYER_SCENE: PackedScene = preload("res://scenes/player.tscn")
+const INTERACTABLE_SCRIPT = preload("res://scripts/interactable.gd")
 var day_clock := 0.22
 var sun: DirectionalLight3D
 var clock_label: Label
@@ -11,6 +12,7 @@ func _ready() -> void:
 	_create_roads()
 	_create_town()
 	_create_landmarks()
+	_create_city_services()
 	_create_player()
 	_create_world_hud()
 
@@ -42,7 +44,6 @@ func _create_environment() -> void:
 	environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	world_env.environment = environment
 	add_child(world_env)
-
 	sun = DirectionalLight3D.new()
 	sun.name = "DynamicSun"
 	sun.rotation_degrees = Vector3(-38, -28, 0)
@@ -59,10 +60,7 @@ func _create_ground() -> void:
 	var plane := PlaneMesh.new()
 	plane.size = Vector2(240, 240)
 	mesh.mesh = plane
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(0.16, 0.21, 0.18)
-	material.roughness = 1.0
-	mesh.material_override = material
+	mesh.material_override = _mat(Color(0.16, 0.21, 0.18), 1.0)
 	ground.add_child(mesh)
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
@@ -100,21 +98,17 @@ func _create_town() -> void:
 				continue
 			var width := rng.randf_range(6.0, 9.0)
 			var depth := rng.randf_range(6.0, 9.0)
-			var floors := rng.randi_range(2, 5)
-			var height := float(floors) * rng.randf_range(2.8, 3.2)
+			var height := float(rng.randi_range(2, 5)) * rng.randf_range(2.8, 3.2)
 			var building := StaticBody3D.new()
 			building.name = "Building_%d_%d" % [x, z]
 			building.position = Vector3(x * 16.0, height * 0.5, z * 16.0)
 			add_child(building)
-
 			var facade := MeshInstance3D.new()
 			var box_mesh := BoxMesh.new()
 			box_mesh.size = Vector3(width, height, depth)
 			facade.mesh = box_mesh
-			var wall_color := Color(rng.randf_range(0.31, 0.58), rng.randf_range(0.27, 0.45), rng.randf_range(0.2, 0.34))
-			facade.material_override = _mat(wall_color, 0.88)
+			facade.material_override = _mat(Color(rng.randf_range(0.31,0.58),rng.randf_range(0.27,0.45),rng.randf_range(0.2,0.34)),0.88)
 			building.add_child(facade)
-
 			var roof := MeshInstance3D.new()
 			var roof_mesh := BoxMesh.new()
 			roof_mesh.size = Vector3(width + 0.35, 0.22, depth + 0.35)
@@ -122,15 +116,14 @@ func _create_town() -> void:
 			roof.position.y = height * 0.5 + 0.12
 			roof.material_override = _mat(Color(0.12, 0.14, 0.17), 0.82)
 			building.add_child(roof)
-
-			_add_windows(building, width, height, depth, rng)
+			_add_windows(building, width, height, depth)
 			var collision := CollisionShape3D.new()
 			var shape := BoxShape3D.new()
 			shape.size = Vector3(width, height, depth)
 			collision.shape = shape
 			building.add_child(collision)
 
-func _add_windows(parent: Node3D, width: float, height: float, depth: float, rng: RandomNumberGenerator) -> void:
+func _add_windows(parent: Node3D, width: float, height: float, depth: float) -> void:
 	var glass := _mat(Color(0.08, 0.24, 0.32), 0.22)
 	for floor_index in range(int(height / 3.0)):
 		for side in [-1, 1]:
@@ -144,7 +137,6 @@ func _add_windows(parent: Node3D, width: float, height: float, depth: float, rng
 				parent.add_child(window)
 
 func _create_landmarks() -> void:
-	# A central stone plaza and a climbable-looking tower silhouette.
 	var plaza := MeshInstance3D.new()
 	var plaza_mesh := BoxMesh.new()
 	plaza_mesh.size = Vector3(25, 0.18, 25)
@@ -152,7 +144,6 @@ func _create_landmarks() -> void:
 	plaza.position = Vector3(0, 0.12, 0)
 	plaza.material_override = _mat(Color(0.36, 0.34, 0.3), 0.95)
 	add_child(plaza)
-
 	var tower := StaticBody3D.new()
 	tower.name = "OldClockTower"
 	tower.position = Vector3(0, 9, -24)
@@ -168,6 +159,32 @@ func _create_landmarks() -> void:
 	tower_shape.size = Vector3(7, 18, 7)
 	tower_collision.shape = tower_shape
 	tower.add_child(tower_collision)
+
+func _create_city_services() -> void:
+	_spawn_service("Mission Board", "Find your first city mission.", "mission", Vector3(3.5, 0.9, 3.5), Color(0.18, 0.55, 0.78))
+	_spawn_service("Work Office", "Take a quick city job.", "job", Vector3(-3.5, 0.9, 3.5), Color(0.78, 0.55, 0.18))
+	_spawn_service("Supply Shop", "Buy supplies for your journey.", "shop", Vector3(3.5, 0.9, -3.5), Color(0.24, 0.68, 0.42))
+	_spawn_service("Small Townhouse", "Purchase your first property.", "property", Vector3(-3.5, 0.9, -3.5), Color(0.64, 0.34, 0.72))
+
+func _spawn_service(title: String, info: String, kind: String, pos: Vector3, tint: Color) -> void:
+	var item := StaticBody3D.new()
+	item.set_script(INTERACTABLE_SCRIPT)
+	item.display_name = title
+	item.description = info
+	item.interaction_type = kind
+	item.position = pos
+	add_child(item)
+	var mesh := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(1.2, 1.8, 0.5)
+	mesh.mesh = box
+	mesh.material_override = _mat(tint, 0.42)
+	item.add_child(mesh)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = Vector3(1.2, 1.8, 0.5)
+	collision.shape = shape
+	item.add_child(collision)
 
 func _create_player() -> void:
 	var player := PLAYER_SCENE.instantiate()
