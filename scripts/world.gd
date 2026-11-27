@@ -92,8 +92,8 @@ func _process(delta: float) -> void:
 	_update_traffic(delta)
 
 func _create_surface_materials() -> void:
-	terrain_material = _noise_material(Color(0.34, 0.43, 0.29), 0.98, 0.055, 5, 512)
-	asphalt_material = _noise_material(Color(0.19, 0.21, 0.23), 0.96, 0.12, 3, 512)
+	terrain_material = _mat(Color(0.36, 0.45, 0.31), 0.98)
+	asphalt_material = _mat(Color(0.23, 0.25, 0.27), 0.98)
 	bark_material = _noise_material(Color(0.34, 0.20, 0.11), 1.0, 0.19, 4, 256)
 	plaster_material = _noise_material(Color(0.66, 0.57, 0.43), 0.92, 0.085, 4, 512)
 	stone_material = _noise_material(Color(0.43, 0.41, 0.37), 0.94, 0.14, 4, 512)
@@ -453,20 +453,17 @@ func _create_traffic_system() -> void:
 
 
 func _create_city_streets() -> void:
-	var sidewalk := _mat(Color(0.39,0.39,0.37),0.94)
+	var sidewalk := _mat(Color(0.43,0.43,0.41),0.96)
 	var curb := _mat(Color(0.57,0.54,0.48),0.9)
 	for index in range(-5,6):
 		var offset := float(index)*16.0+8.0
 		_add_road_surface(Vector3(offset,0.035,0),Vector3(5.2,0.07,220),asphalt_material,"StreetV_%d"%index)
 		_add_road_surface(Vector3(0,0.035,offset),Vector3(220,0.07,5.2),asphalt_material,"StreetH_%d"%index)
-		for side in [-1.0,1.0]:
-			_add_road_surface(Vector3(offset+side*3.25,0.055,0),Vector3(1.25,0.11,220),sidewalk,"WalkV_%d_%d"%[index,int(side)])
-			_add_road_surface(Vector3(0,0.055,offset+side*3.25),Vector3(220,0.11,1.25),sidewalk,"WalkH_%d_%d"%[index,int(side)])
-			_add_road_surface(Vector3(offset+side*2.58,0.075,0),Vector3(0.12,0.15,220),curb,"CurbV_%d_%d"%[index,int(side)])
-			_add_road_surface(Vector3(0,0.075,offset+side*2.58),Vector3(220,0.15,0.12),curb,"CurbH_%d_%d"%[index,int(side)])
-	for side in [-1.0,1.0]:
-		_add_road_surface(Vector3(side*8.25,0.055,0),Vector3(2.0,0.11,220),sidewalk,"MainWalkV")
-		_add_road_surface(Vector3(0,0.055,side*8.25),Vector3(220,0.11,2.0),sidewalk,"MainWalkH")
+		var side := 1.0 if index % 2 == 0 else -1.0
+		_add_road_surface(Vector3(offset+side*3.25,0.055,0),Vector3(1.35,0.11,220),sidewalk,"WalkV_%d"%index)
+		_add_road_surface(Vector3(0,0.055,offset+side*3.25),Vector3(220,0.11,1.35),sidewalk,"WalkH_%d"%index)
+		_add_road_surface(Vector3(offset+side*2.58,0.075,0),Vector3(0.12,0.15,220),curb,"CurbV_%d"%index)
+		_add_road_surface(Vector3(0,0.075,offset+side*2.58),Vector3(220,0.15,0.12),curb,"CurbH_%d"%index)
 
 
 func _add_road_surface(pos: Vector3, dimensions: Vector3, material: Material, label: String) -> void:
