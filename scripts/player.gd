@@ -4,8 +4,15 @@ extends CharacterBody3D
 @export var sprint_speed := 10.0
 @export var jump_velocity := 6.6
 @export var mouse_sensitivity := 0.0022
-@export var acceleration := 27.0
-@export var braking := 34.0
+@export var acceleration := 34.0
+@export var braking := 15.0
+@export var crouch_speed := 2.8
+var touch_root: Control
+var touch_buttons: Dictionary = {}
+var touch_button_positions: Dictionary = {}
+var touch_edit_mode := false
+var touch_edit_hint: Label
+var touch_edit_done: Button
 
 @onready var camera_pivot: Node3D = $CameraPivot
 @onready var camera: Camera3D = $CameraPivot/Camera3D
@@ -97,10 +104,11 @@ func _physics_process(delta: float) -> void:
 	was_on_floor = is_on_floor()
 	if not was_on_floor:
 		velocity.y -= gravity * delta
-	var input_vector := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
-	var direction := (transform.basis * Vector3(input_vector.x, 0, input_vector.y)).normalized()
-	var wants_sprint := Input.is_action_pressed("sprint") and stamina > 1.0 and input_vector.length() > 0.1
-	var target_speed := sprint_speed if wants_sprint else walk_speed
+	var input_vector := Input.get_vector("move_left", "move_right", "move_forward", "move_back", 0.16)
+	var direction := (global_transform.basis * Vector3(input_vector.x, 0.0, input_vector.y)).normalized()
+	var crouching := Input.is_action_pressed("crouch")
+	var wants_sprint := Input.is_action_pressed("sprint") and not crouching and stamina > 1.0 and input_vector.length() > 0.1
+	var target_speed := crouch_speed if crouching else (sprint_speed if wants_sprint else walk_speed)
 	stamina = maxf(0.0, stamina - 22.0 * delta) if wants_sprint else minf(100.0, stamina + 13.0 * delta)
 	if direction.length() > 0.01:
 		velocity.x = move_toward(velocity.x, direction.x * target_speed, acceleration * delta)
@@ -108,14 +116,13 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, braking * delta)
 		velocity.z = move_toward(velocity.z, 0.0, braking * delta)
+	camera_pivot.position.y = 1.12 if crouching else 1.55
 	if Input.is_action_just_pressed("jump"):
 		if is_on_floor():
 			velocity.y = jump_velocity
 			AudioManager.play_jump()
 		else:
 			_try_parkour_jump(direction)
-	if is_on_floor() and direction.length() > 0.05:
-		_assist_stair_step(direction)
 	move_and_slide()
 	if not was_on_floor and is_on_floor():
 		landing_bounce = 0.18
@@ -429,7 +436,7 @@ func _show_message(value: String) -> void:
 	message_timer = 4.0
 
 func _add_input_actions() -> void:
-	var keys := {"move_left":[KEY_A,KEY_LEFT],"move_right":[KEY_D,KEY_RIGHT],"move_forward":[KEY_W,KEY_UP],"move_back":[KEY_S,KEY_DOWN],"jump":[KEY_SPACE],"sprint":[KEY_SHIFT]}
+	var keys := {"move_left":[KEY_A,KEY_LEFT],"move_right":[KEY_D,KEY_RIGHT],"move_forward":[KEY_W,KEY_UP],"move_back":[KEY_S,KEY_DOWN],"jump":[KEY_SPACE],"sprint":[KEY_SHIFT],"crouch":[KEY_CTRL,KEY_C]}
 	for action in keys:
 		if not InputMap.has_action(action):
 			InputMap.add_action(action)
@@ -586,62 +593,128 @@ func _refresh_inventory_ui() -> void:
 func _build_touch_controls() -> void:
 	var layer := CanvasLayer.new()
 	layer.name = "MobileControls"
+	layer.layer = 8
 	add_child(layer)
-	var panel := HBoxContainer.new()
-	panel.anchor_left = 0.02
-	panel.anchor_top = 0.68
-	panel.anchor_right = 0.98
-	panel.anchor_bottom = 0.98
-	panel.add_theme_constant_override("separation", 10)
-	layer.add_child(panel)
-	var movement := VBoxContainer.new()
-	_add_touch_button(movement, "▲", "move_forward")
-	var row := HBoxContainer.new()
-	movement.add_child(row)
-	_add_touch_button(row, "◀", "move_left")
-	_add_touch_button(row, "▼", "move_back")
-	_add_touch_button(row, "▶", "move_right")
-	var actions := VBoxContainer.new()
-	_add_touch_button(actions, "JUMP", "jump")
-	_add_touch_button(actions, "SPRINT", "sprint")
-	_add_touch_button(actions, "INTERACT", "interact")
-	_add_touch_button(actions, "CAMERA", "camera_toggle")
-	_add_touch_button(actions, "BAG", "inventory_toggle")
-	var menu_button := Button.new()
-	menu_button.text = "MENU"
-	menu_button.custom_minimum_size = Vector2(76, 42) * touch_button_scale
-	menu_button.add_to_group("touch_game_buttons")
-	menu_button.pressed.connect(_toggle_pause_menu)
-	actions.add_child(menu_button)
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	if touch_layout_left:
-		panel.add_child(movement)
-		panel.add_child(spacer)
-		panel.add_child(actions)
-	else:
-		panel.add_child(actions)
-		panel.add_child(spacer)
-		panel.add_child(movement)
+	touch_root = Control.new()
+	touch_root.name = "TouchLayoutRoot"
+	touch_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	touch_root.mouse_filter = Control.MOUSE_FILTER_PASS
+	layer.add_child(touch_root)
+	var defaults := {
+		"move_forward": Vector2(0.09, 0.70), "move_left": Vector2(0.025, 0.82),
+		"move_back": Vector2(0.09, 0.82), "move_right": Vector2(0.155, 0.82),
+		"jump": Vector2(0.84, 0.69), "crouch": Vector2(0.84, 0.81),
+		"sprint": Vector2(0.73, 0.81), "interact": Vector2(0.91, 0.81),
+		"camera_toggle": Vector2(0.73, 0.92), "inventory_toggle": Vector2(0.84, 0.92),
+		"menu": Vector2(0.91, 0.92)
+	}
+	for action in defaults:
+		if not touch_button_positions.has(action):
+			touch_button_positions[action] = defaults[action]
+	var captions := {
+		"move_forward":"▲", "move_left":"◀", "move_back":"▼", "move_right":"▶",
+		"jump":"JUMP", "crouch":"SIT", "sprint":"RUN", "interact":"USE",
+		"camera_toggle":"CAM", "inventory_toggle":"BAG", "menu":"MENU"
+	}
+	for action in defaults:
+		var button := Button.new()
+		button.name = "Touch_" + action
+		button.text = captions[action]
+		button.custom_minimum_size = Vector2(70, 54) * touch_button_scale
+		button.focus_mode = Control.FOCUS_NONE
+		button.mouse_filter = Control.MOUSE_FILTER_STOP
+		button.modulate = Color(0.72, 0.9, 1.0, 0.82)
+		button.add_to_group("touch_game_buttons")
+		touch_root.add_child(button)
+		touch_buttons[action] = button
+		button.button_down.connect(_on_touch_action_down.bind(action))
+		button.button_up.connect(_on_touch_action_up.bind(action))
+		button.gui_input.connect(_on_touch_button_gui_input.bind(action))
+	touch_edit_hint = Label.new()
+	touch_edit_hint.text = "EDIT CONTROLS: DRAG BUTTONS TO MOVE"
+	touch_edit_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	touch_edit_hint.anchor_left = 0.2
+	touch_edit_hint.anchor_right = 0.8
+	touch_edit_hint.anchor_top = 0.04
+	touch_edit_hint.anchor_bottom = 0.10
+	touch_edit_hint.add_theme_color_override("font_color", Color(1.0, 0.88, 0.35))
+	touch_edit_hint.visible = false
+	touch_root.add_child(touch_edit_hint)
+	touch_edit_done = Button.new()
+	touch_edit_done.text = "DONE"
+	touch_edit_done.anchor_left = 0.82
+	touch_edit_done.anchor_right = 0.98
+	touch_edit_done.anchor_top = 0.04
+	touch_edit_done.anchor_bottom = 0.12
+	touch_edit_done.visible = false
+	touch_edit_done.pressed.connect(_toggle_touch_edit_mode)
+	touch_root.add_child(touch_edit_done)
+	touch_root.resized.connect(_position_touch_buttons)
+	_position_touch_buttons()
 
-func _add_touch_button(parent: Control, caption: String, action: String) -> void:
-	var button := Button.new()
-	button.text = caption
-	button.custom_minimum_size = Vector2(76, 50) * touch_button_scale
-	button.focus_mode = Control.FOCUS_NONE
-	button.modulate = Color(0.7, 0.9, 1.0, 0.88)
-	parent.add_child(button)
-	button.add_to_group("touch_game_buttons")
-	if action == "camera_toggle":
-		button.pressed.connect(_toggle_camera)
-	elif action == "interact":
-		button.pressed.connect(_interact_nearest)
-	elif action == "inventory_toggle":
-		button.pressed.connect(_toggle_inventory)
-	else:
-		button.button_down.connect(func(): Input.action_press(action))
-		button.button_up.connect(func(): Input.action_release(action))
+func _position_touch_buttons() -> void:
+	if touch_root == null:
+		return
+	for action in touch_buttons:
+		var button: Button = touch_buttons[action]
+		var normalized: Vector2 = touch_button_positions.get(action, Vector2(0.5, 0.5))
+		button.position = Vector2(normalized.x * touch_root.size.x, normalized.y * touch_root.size.y)
+		button.custom_minimum_size = Vector2(70, 54) * touch_button_scale
 
+func _on_touch_action_down(action: String) -> void:
+	if touch_edit_mode:
+		return
+	match action:
+		"camera_toggle": _toggle_camera()
+		"interact": _interact_nearest()
+		"inventory_toggle": _toggle_inventory()
+		"menu": _toggle_pause_menu()
+		_: Input.action_press(action)
+
+func _on_touch_action_up(action: String) -> void:
+	if action in ["move_left", "move_right", "move_forward", "move_back", "jump", "sprint", "crouch"]:
+		Input.action_release(action)
+
+func _on_touch_button_gui_input(event: InputEvent, action: String) -> void:
+	if not touch_edit_mode:
+		return
+	var button: Button = touch_buttons.get(action)
+	if button == null:
+		return
+	if event is InputEventScreenDrag:
+		button.position += event.relative
+		_save_touch_button_position(action, button)
+	elif event is InputEventMouseMotion and (event.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
+		button.position += event.relative
+		_save_touch_button_position(action, button)
+
+func _save_touch_button_position(action: String, button: Button) -> void:
+	var max_x := maxf(1.0, touch_root.size.x - button.size.x)
+	var max_y := maxf(1.0, touch_root.size.y - button.size.y)
+	button.position.x = clampf(button.position.x, 0.0, max_x)
+	button.position.y = clampf(button.position.y, 0.0, max_y)
+	touch_button_positions[action] = Vector2(button.position.x / max_x, button.position.y / max_y)
+	_save_player_settings()
+
+func _toggle_touch_edit_mode() -> void:
+	touch_edit_mode = not touch_edit_mode
+	if touch_edit_mode:
+		_release_touch_actions()
+		touch_edit_hint.visible = true
+		touch_edit_done.visible = true
+		for button in touch_buttons.values():
+			button.modulate = Color(1.0, 0.78, 0.34, 0.95)
+		_show_message("DRAG EACH BUTTON TO MOVE IT")
+	else:
+		touch_edit_hint.visible = false
+		touch_edit_done.visible = false
+		for button in touch_buttons.values():
+			button.modulate = Color(0.72, 0.9, 1.0, 0.82)
+		_save_player_settings()
+
+func _release_touch_actions() -> void:
+	for action in ["move_left", "move_right", "move_forward", "move_back", "jump", "sprint", "crouch"]:
+		Input.action_release(action)
 
 func _build_pause_and_settings() -> void:
 	pause_overlay = ColorRect.new()
@@ -746,6 +819,10 @@ func _build_pause_and_settings() -> void:
 		_save_player_settings()
 	)
 	settings_stack.add_child(layout)
+	var edit_layout := Button.new()
+	edit_layout.text = "CUSTOMIZE TOUCH BUTTON POSITIONS"
+	edit_layout.pressed.connect(_toggle_touch_edit_mode)
+	settings_stack.add_child(edit_layout)
 	var back := Button.new()
 	back.text = "BACK TO PAUSE MENU"
 	back.pressed.connect(func():
@@ -774,6 +851,11 @@ func _toggle_pause_menu() -> void:
 	if pause_overlay == null:
 		return
 	pause_overlay.visible = not pause_overlay.visible
+	if pause_overlay.visible:
+		_release_touch_actions()
+		touch_edit_mode = false
+		touch_edit_hint.visible = false
+		touch_edit_done.visible = false
 	settings_panel.visible = false
 	pause_card.visible = true
 	get_tree().paused = pause_overlay.visible
@@ -819,13 +901,22 @@ func _apply_graphics_quality(index: int) -> void:
 func _apply_touch_button_scale() -> void:
 	for button in get_tree().get_nodes_in_group("touch_game_buttons"):
 		if button is Button:
-			button.custom_minimum_size = Vector2(76, 50) * touch_button_scale
+			button.custom_minimum_size = Vector2(70, 54) * touch_button_scale
+	_position_touch_buttons()
 
 func _rebuild_touch_controls() -> void:
 	var old := get_node_or_null("MobileControls")
 	if old:
 		old.queue_free()
+	touch_buttons.clear()
+	touch_root = null
 	_build_touch_controls()
+	_apply_saved_touch_positions()
+
+func _apply_saved_touch_positions() -> void:
+	if touch_root == null:
+		return
+	_position_touch_buttons()
 
 func _save_player_settings() -> void:
 	settings_config.set_value("camera", "sensitivity", sensitivity_multiplier)
@@ -834,6 +925,8 @@ func _save_player_settings() -> void:
 	settings_config.set_value("camera", "distance", camera_distance)
 	settings_config.set_value("controls", "button_scale", touch_button_scale)
 	settings_config.set_value("controls", "left_hand_move", touch_layout_left)
+	for action in touch_button_positions:
+		settings_config.set_value("touch_layout", action, touch_button_positions[action])
 	settings_config.set_value("graphics", "quality", graphics_quality)
 	settings_config.save("user://stickman_settings.cfg")
 
@@ -846,8 +939,11 @@ func _load_player_settings() -> void:
 	camera_distance = float(settings_config.get_value("camera", "distance", 4.2))
 	touch_button_scale = float(settings_config.get_value("controls", "button_scale", 1.0))
 	touch_layout_left = bool(settings_config.get_value("controls", "left_hand_move", true))
+	for action in touch_button_positions:
+		touch_button_positions[action] = settings_config.get_value("touch_layout", action, touch_button_positions[action])
 	graphics_quality = int(settings_config.get_value("graphics", "quality", 1))
 	camera.fov = camera_fov
 	camera.position.z = camera_distance
+	_apply_saved_touch_positions()
 	_apply_touch_button_scale()
 	_apply_graphics_quality(graphics_quality)
