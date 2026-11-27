@@ -28,6 +28,8 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
+	else:
+		velocity.y = 0.0
 	var player := get_tree().get_first_node_in_group("player") as Node3D
 	var fleeing := false
 	if GameState.wanted_level > 0 and player != null and global_position.distance_to(player.global_position) < 22.0:
@@ -35,33 +37,41 @@ func _physics_process(delta: float) -> void:
 		away.y = 0.0
 		if away.length_squared() < 0.01:
 			away = Vector3.RIGHT
-		target_position = global_position + away.normalized() * 12.0
+		target_position = global_position + away.normalized() * 14.0
 		wait_time = 0.0
 		fleeing = true
 
 	var flat_target := target_position - global_position
 	flat_target.y = 0.0
-	var current_speed := move_speed * (2.0 if fleeing else 1.0)
 	if wait_time > 0.0 and not fleeing:
 		wait_time = maxf(0.0, wait_time - delta)
-		velocity.x = move_toward(velocity.x, 0.0, 8.0 * delta)
-		velocity.z = move_toward(velocity.z, 0.0, 8.0 * delta)
-	elif flat_target.length() < 1.0:
+		velocity.x = move_toward(velocity.x, 0.0, 5.0 * delta)
+		velocity.z = move_toward(velocity.z, 0.0, 5.0 * delta)
+	elif flat_target.length() < 0.9:
 		_choose_destination()
 	else:
 		var direction := flat_target.normalized()
-		velocity.x = move_toward(velocity.x, direction.x * current_speed, 8.0 * delta)
-		velocity.z = move_toward(velocity.z, direction.z * current_speed, 8.0 * delta)
-		look_at(global_position + direction, Vector3.UP)
+		var ray := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.8, global_position + Vector3.UP * 0.8 + direction * 1.35)
+		ray.exclude = [self]
+		var obstacle := get_world_3d().direct_space_state.intersect_ray(ray)
+		if not obstacle.is_empty():
+			_choose_destination()
+		else:
+			var current_speed := move_speed * (1.7 if fleeing else 1.0)
+			velocity.x = move_toward(velocity.x, direction.x * current_speed, 7.0 * delta)
+			velocity.z = move_toward(velocity.z, direction.z * current_speed, 7.0 * delta)
+			look_at(global_position + direction, Vector3.UP)
 	move_and_slide()
-
+	if is_on_wall():
+		_choose_destination()
+		stuck_time = 0.0
 	_wrap_world_edges()
 	var moved_distance := global_position.distance_to(previous_position)
-	if moved_distance < 0.015 and flat_target.length() > 1.2 and wait_time <= 0.0:
+	if moved_distance < 0.012 and flat_target.length() > 1.0 and wait_time <= 0.0:
 		stuck_time += delta
 	else:
 		stuck_time = 0.0
-	if stuck_time > 1.4:
+	if stuck_time > 0.65:
 		_choose_destination()
 		stuck_time = 0.0
 	previous_position = global_position
@@ -98,9 +108,12 @@ func interact() -> String:
 	return display_name + ": " + dialogue
 
 func _choose_destination() -> void:
-	var edge := minf(wander_radius, 106.0)
-	target_position = Vector3(randf_range(-edge, edge), global_position.y, randf_range(-edge, edge))
-	wait_time = randf_range(0.15, 0.75)
+	var offset := Vector3(randf_range(-18.0, 18.0), 0.0, randf_range(-18.0, 18.0))
+	var candidate := home_position + offset
+	if global_position.distance_to(home_position) > minf(wander_radius, 95.0):
+		candidate = home_position
+	target_position = Vector3(candidate.x, global_position.y, candidate.z)
+	wait_time = randf_range(0.08, 0.28)
 
 func _build_appearance() -> void:
 	var outfit_colors := [Color(0.12,0.36,0.62),Color(0.56,0.22,0.16),Color(0.18,0.43,0.31),Color(0.42,0.30,0.52),Color(0.68,0.48,0.19)]
