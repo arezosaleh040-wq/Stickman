@@ -700,6 +700,11 @@ func _toggle_touch_edit_mode() -> void:
 	touch_edit_mode = not touch_edit_mode
 	if touch_edit_mode:
 		_release_touch_actions()
+		pause_overlay.visible = false
+		settings_panel.visible = false
+		pause_card.visible = true
+		get_tree().paused = false
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 		touch_edit_hint.visible = true
 		touch_edit_done.visible = true
 		for button in touch_buttons.values():
