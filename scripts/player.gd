@@ -33,7 +33,11 @@ var pause_card: PanelContainer
 var settings_config := ConfigFile.new()
 var stamina := 100.0
 var visual_root: Node3D
-var limbs: Array[Node3D] = []
+var arm_pivots: Array[Node3D] = []
+var arm_elbows: Array[Node3D] = []
+var leg_pivots: Array[Node3D] = []
+var leg_knees: Array[Node3D] = []
+var leg_feet: Array[Node3D] = []
 var walk_phase := 0.0
 var body_torso: Node3D
 var body_hip: Node3D
@@ -50,6 +54,8 @@ var prompt_label: Label
 var message_label: Label
 var message_timer := 0.0
 var parkour_cooldown := 0.0
+var jump_buffer_timer := 0.0
+var coyote_timer := 0.0
 var is_vaulting := false
 var footstep_clock := 0.0
 var inventory_panel: PanelContainer
@@ -102,33 +108,55 @@ func _rotate_camera(relative: Vector2) -> void:
 func _physics_process(delta: float) -> void:
 	parkour_cooldown = maxf(0.0, parkour_cooldown - delta)
 	was_on_floor = is_on_floor()
-	if not was_on_floor:
-		velocity.y -= gravity * delta
+	if was_on_floor:
+		coyote_timer = 0.14
+	else:
+		coyote_timer = maxf(0.0, coyote_timer - delta)
+		var gravity_multiplier := 1.0
+		if velocity.y > 0.0:
+			gravity_multiplier = 0.68 if Input.is_action_pressed("jump") else 1.32
+		else:
+			gravity_multiplier = 1.18
+		velocity.y -= gravity * gravity_multiplier * delta
+
+	if Input.is_action_just_pressed("jump"):
+		jump_buffer_timer = 0.19
+	else:
+		jump_buffer_timer = maxf(0.0, jump_buffer_timer - delta)
+
 	var input_vector := Input.get_vector("move_left", "move_right", "move_forward", "move_back", 0.16)
 	var direction := (global_transform.basis * Vector3(input_vector.x, 0.0, input_vector.y)).normalized()
 	var crouching := Input.is_action_pressed("crouch")
 	var wants_sprint := Input.is_action_pressed("sprint") and not crouching and stamina > 1.0 and input_vector.length() > 0.1
 	var target_speed := crouch_speed if crouching else (sprint_speed if wants_sprint else walk_speed)
 	stamina = maxf(0.0, stamina - 22.0 * delta) if wants_sprint else minf(100.0, stamina + 13.0 * delta)
+
 	if direction.length() > 0.01:
 		velocity.x = move_toward(velocity.x, direction.x * target_speed, acceleration * delta)
 		velocity.z = move_toward(velocity.z, direction.z * target_speed, acceleration * delta)
 	else:
 		velocity.x = move_toward(velocity.x, 0.0, braking * delta)
 		velocity.z = move_toward(velocity.z, 0.0, braking * delta)
+
 	camera_pivot.position.y = 1.12 if crouching else 1.55
-	if Input.is_action_just_pressed("jump"):
-		if is_on_floor():
-			velocity.y = jump_velocity
-			AudioManager.play_jump()
-		else:
-			_try_parkour_jump(direction)
+
+	if jump_buffer_timer > 0.0 and coyote_timer > 0.0 and not crouching:
+		velocity.y = jump_velocity
+		jump_buffer_timer = 0.0
+		coyote_timer = 0.0
+		AudioManager.play_jump()
+	elif Input.is_action_just_pressed("jump") and not was_on_floor:
+		_try_parkour_jump(direction)
+
 	if direction.length() > 0.01 and is_on_floor() and velocity.y <= 0.0:
 		_assist_stair_step(direction)
+
 	move_and_slide()
 	if not was_on_floor and is_on_floor():
-		landing_bounce = 0.18
-	_animate_character(delta, input_vector.length() > 0.1)
+		landing_bounce = 0.22
+		coyote_timer = 0.14
+
+	_animate_character(delta, input_vector)
 	if is_on_floor() and input_vector.length() > 0.1:
 		footstep_clock += delta
 		var step_interval := 0.34 if wants_sprint else 0.52
@@ -137,6 +165,7 @@ func _physics_process(delta: float) -> void:
 			footstep_clock = 0.0
 	else:
 		footstep_clock = 0.0
+
 	_sync_cape_equipment()
 	_update_interaction_prompt()
 	if message_timer > 0.0:
@@ -174,40 +203,73 @@ func _try_parkour_jump(direction: Vector3) -> void:
 	stamina = maxf(0.0, stamina - 12.0)
 	parkour_cooldown = 0.55
 
-func _animate_character(delta: float, moving: bool) -> void:
+func _animate_character(delta: float, input_vector: Vector2) -> void:
 	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
+	var moving := input_vector.length() > 0.1 and horizontal_speed > 0.12
 	var sprinting := Input.is_action_pressed("sprint") and moving and stamina > 0.0
-	var target_blend := clampf(horizontal_speed / maxf(sprint_speed, 0.1), 0.0, 1.0)
-	locomotion_blend = move_toward(locomotion_blend, target_blend, delta * 5.5)
-	if moving:
-		walk_phase += delta * (15.0 if sprinting else 9.0) * lerpf(0.45, 1.0, locomotion_blend)
-	else:
-		walk_phase = move_toward(walk_phase, 0.0, delta * 6.0)
-	var airborne := not is_on_floor()
-	var run_amount := 1.0 if sprinting else 0.0
-	for i in range(limbs.size()):
-		var phase_offset := PI if i == 1 or i == 3 else 0.0
-		var stride := sin(walk_phase + phase_offset)
-		var amount := stride * lerpf(0.42, 0.78, run_amount) * locomotion_blend
-		if i < 2:
-			amount = -amount * 0.82
-			limbs[i].rotation.z = lerpf(limbs[i].rotation.z, (-0.12 if i == 0 else 0.12) * locomotion_blend, delta * 7.0)
-		else:
-			limbs[i].rotation.z = lerpf(limbs[i].rotation.z, 0.0, delta * 8.0)
-		if airborne:
-			amount = -0.38 if i >= 2 else 0.32
-		limbs[i].rotation.x = lerpf(limbs[i].rotation.x, amount, delta * (10.0 if airborne else 13.0))
-	landing_bounce = move_toward(landing_bounce, 0.0, delta * 1.8)
-	if body_torso:
-		var lean := -0.10 * locomotion_blend if sprinting else -0.035 * locomotion_blend
-		body_torso.rotation.x = lerpf(body_torso.rotation.x, lean + (0.12 if airborne else 0.0), delta * 7.0)
-		body_torso.position.y = lerpf(body_torso.position.y, 1.12 + (sin(walk_phase * 2.0) * 0.035 * locomotion_blend if not airborne else -landing_bounce), delta * 10.0)
-	if body_hip:
-		body_hip.rotation.x = lerpf(body_hip.rotation.x, 0.08 if airborne else 0.0, delta * 8.0)
-	if body_head:
-		body_head.rotation.x = lerpf(body_head.rotation.x, -0.025 * locomotion_blend, delta * 5.0)
-	_update_cape_motion(delta, horizontal_speed, sprinting, airborne)
+	var run_weight := 1.0 if sprinting else 0.0
+	var target_blend := clampf(horizontal_speed / maxf(walk_speed, 0.1), 0.0, 1.0)
+	locomotion_blend = move_toward(locomotion_blend, target_blend if moving else 0.0, delta * (4.8 if moving else 7.5))
 
+	if locomotion_blend > 0.015:
+		var speed_factor := clampf(horizontal_speed / maxf(sprint_speed if sprinting else walk_speed, 0.1), 0.55, 1.12)
+		walk_phase += delta * (7.4 if not sprinting else 11.6) * speed_factor
+	else:
+		walk_phase = move_toward(walk_phase, 0.0, delta * 5.5)
+
+	var airborne := not is_on_floor()
+	var rising := airborne and velocity.y > 0.25
+	var falling := airborne and velocity.y <= 0.25
+	var stride_amount := lerpf(0.43, 0.72, run_weight) * locomotion_blend
+
+	for i in range(2):
+		var phase_offset := PI if i == 1 else 0.0
+		var leg_phase := walk_phase + phase_offset
+		var leg_swing := sin(leg_phase) * stride_amount
+		var knee_bend := maxf(0.0, -cos(leg_phase)) * lerpf(0.12, 0.62, run_weight) * locomotion_blend
+		var arm_phase := leg_phase + PI
+		var arm_swing := sin(arm_phase) * lerpf(0.28, 0.55, run_weight) * locomotion_blend
+		var elbow_bend := lerpf(0.12, 0.34, run_weight) * locomotion_blend + maxf(0.0, cos(arm_phase)) * 0.12
+
+		if airborne:
+			leg_swing = -0.28 if rising else 0.18
+			knee_bend = 0.72 if rising else 0.28
+			arm_swing = 0.42 if rising else -0.18
+			elbow_bend = 0.48 if rising else 0.26
+
+		if i < leg_pivots.size():
+			leg_pivots[i].rotation.x = lerpf(leg_pivots[i].rotation.x, leg_swing, delta * (12.0 if airborne else 10.0))
+			leg_pivots[i].rotation.z = lerpf(leg_pivots[i].rotation.z, (-0.025 if i == 0 else 0.025) * locomotion_blend, delta * 9.0)
+		if i < leg_knees.size():
+			leg_knees[i].rotation.x = lerpf(leg_knees[i].rotation.x, knee_bend, delta * 11.0)
+		if i < leg_feet.size():
+			var foot_angle := -leg_swing * 0.42 - knee_bend * 0.30
+			leg_feet[i].rotation.x = lerpf(leg_feet[i].rotation.x, foot_angle, delta * 10.0)
+		if i < arm_pivots.size():
+			arm_pivots[i].rotation.x = lerpf(arm_pivots[i].rotation.x, arm_swing, delta * 10.0)
+			arm_pivots[i].rotation.z = lerpf(arm_pivots[i].rotation.z, (-0.055 if i == 0 else 0.055) + input_vector.x * 0.035, delta * 8.0)
+		if i < arm_elbows.size():
+			arm_elbows[i].rotation.x = lerpf(arm_elbows[i].rotation.x, elbow_bend, delta * 10.0)
+
+	landing_bounce = move_toward(landing_bounce, 0.0, delta * 2.5)
+	var idle_breath := sin(Time.get_ticks_msec() * 0.0017) * 0.009 * (1.0 - locomotion_blend)
+	if body_torso:
+		var forward_lean := -0.045 * locomotion_blend - 0.105 * run_weight
+		if airborne:
+			forward_lean += -0.12 if rising else 0.045
+		body_torso.rotation.x = lerpf(body_torso.rotation.x, forward_lean, delta * 7.0)
+		body_torso.rotation.z = lerpf(body_torso.rotation.z, -input_vector.x * 0.065 * locomotion_blend, delta * 7.0)
+		var gait_bob := absf(sin(walk_phase * 2.0)) * (0.018 + 0.025 * run_weight) * locomotion_blend
+		if airborne:
+			gait_bob = 0.0
+		body_torso.position.y = lerpf(body_torso.position.y, 1.12 + idle_breath + gait_bob - landing_bounce, delta * 12.0)
+	if body_hip:
+		body_hip.rotation.x = lerpf(body_hip.rotation.x, (0.08 + 0.08 * run_weight) * locomotion_blend + (0.12 if airborne else 0.0), delta * 8.0)
+		body_hip.rotation.z = lerpf(body_hip.rotation.z, -input_vector.x * 0.035 * locomotion_blend, delta * 8.0)
+	if body_head:
+		var head_target := -0.025 * locomotion_blend - (body_torso.rotation.x * 0.30 if body_torso else 0.0)
+		body_head.rotation.x = lerpf(body_head.rotation.x, head_target, delta * 6.0)
+	_update_cape_motion(delta, horizontal_speed, sprinting, airborne)
 
 func _assist_stair_step(direction: Vector3) -> void:
 	var horizontal_motion := direction.normalized() * 0.25
@@ -316,18 +378,33 @@ func _build_character() -> void:
 	visual_root = Node3D.new()
 	visual_root.name = "StickmanVisual"
 	add_child(visual_root)
+	arm_pivots.clear()
+	arm_elbows.clear()
+	leg_pivots.clear()
+	leg_knees.clear()
+	leg_feet.clear()
+
 	var dark := _material(Color(0.045, 0.055, 0.075), 0.38)
 	var accent := _material(Color(0.05, 0.72, 0.95), 0.3)
 	var skin := _material(Color(0.92, 0.78, 0.62), 0.55)
-	body_head = _add_sphere("Head", Vector3(0, 1.66, 0), Vector3(0.27, 0.27, 0.27), skin)
-	body_torso = _add_capsule("Torso", Vector3(0, 1.12, 0), 0.16, 0.72, accent)
-	body_hip = _add_capsule("Hip", Vector3(0, 0.72, 0), 0.17, 0.22, dark)
-	_add_limb("LeftArm", Vector3(-0.19, 1.39, 0), 0.075, 0.58, dark)
-	_add_limb("RightArm", Vector3(0.19, 1.39, 0), 0.075, 0.58, dark)
-	_add_limb("LeftLeg", Vector3(-0.1, 0.48, 0), 0.09, 0.7, dark)
-	_add_limb("RightLeg", Vector3(0.1, 0.48, 0), 0.09, 0.7, dark)
+	body_head = _add_sphere("Head", Vector3(0, 1.69, 0), Vector3(0.27, 0.29, 0.27), skin)
+	body_torso = _add_capsule("Torso", Vector3(0, 1.12, 0), 0.17, 0.74, accent)
+	body_hip = _add_capsule("Hip", Vector3(0, 0.75, 0), 0.17, 0.25, dark)
+
+	_add_limb("LeftArm", Vector3(-0.22, 1.45, 0), 0.068, 0.64, dark)
+	_add_limb("RightArm", Vector3(0.22, 1.45, 0), 0.068, 0.64, dark)
+	_add_limb("LeftLeg", Vector3(-0.105, 0.76, 0), 0.09, 0.78, dark)
+	_add_limb("RightLeg", Vector3(0.105, 0.76, 0), 0.09, 0.78, dark)
+
+	_add_box("Visor", Vector3(0, 1.72, -0.238), Vector3(0.27, 0.075, 0.045), accent)
+	_add_box("ChestCore", Vector3(0, 1.23, -0.17), Vector3(0.20, 0.19, 0.055), accent)
+	_add_box("LeftShoulderArmor", Vector3(-0.245, 1.43, -0.015), Vector3(0.22, 0.15, 0.25), accent)
+	_add_box("RightShoulderArmor", Vector3(0.245, 1.43, -0.015), Vector3(0.22, 0.15, 0.25), accent)
+	_add_box("WaistPlate", Vector3(0, 0.83, -0.15), Vector3(0.31, 0.13, 0.07), accent)
+	_add_box("BackUnit", Vector3(0, 1.28, 0.16), Vector3(0.27, 0.34, 0.18), dark)
 	_build_cape()
 	apply_selected_skin()
+
 
 func apply_selected_skin() -> void:
 	if visual_root == null:
@@ -336,19 +413,32 @@ func apply_selected_skin() -> void:
 		[Color(0.035, 0.045, 0.065), Color(0.0, 0.78, 1.0), Color(0.92, 0.78, 0.62)],
 		[Color(0.12, 0.035, 0.025), Color(1.0, 0.24, 0.055), Color(0.78, 0.57, 0.42)],
 		[Color(0.045, 0.075, 0.045), Color(0.48, 0.95, 0.23), Color(0.84, 0.68, 0.52)],
-		[Color(0.035, 0.025, 0.075), Color(0.72, 0.25, 1.0), Color(0.72, 0.63, 0.57)]
+		[Color(0.035, 0.025, 0.075), Color(0.72, 0.25, 1.0), Color(0.72, 0.63, 0.57)],
+		[Color(0.055, 0.11, 0.18), Color(0.32, 0.86, 1.0), Color(0.83, 0.9, 0.96)],
+		[Color(0.16, 0.025, 0.045), Color(1.0, 0.12, 0.18), Color(0.9, 0.69, 0.55)],
+		[Color(0.16, 0.12, 0.045), Color(1.0, 0.72, 0.18), Color(0.92, 0.77, 0.58)],
+		[Color(0.085, 0.025, 0.12), Color(1.0, 0.14, 0.62), Color(0.89, 0.72, 0.68)],
+		[Color(0.02, 0.10, 0.11), Color(0.0, 0.88, 0.78), Color(0.72, 0.82, 0.75)],
+		[Color(0.08, 0.065, 0.04), Color(1.0, 0.52, 0.1), Color(0.72, 0.60, 0.48)]
 	]
 	var palette: Array = palettes[clampi(GameState.character_skin, 0, palettes.size() - 1)]
 	for node in visual_root.find_children("*", "MeshInstance3D", true, false):
 		var mesh_node := node as MeshInstance3D
 		if mesh_node.name == "AnimatedFabric" or mesh_node.name == "CapeCollar":
 			continue
+		var accent_part := mesh_node.name in ["Torso", "Visor", "ChestCore", "LeftShoulderArmor", "RightShoulderArmor", "WaistPlate"] or mesh_node.name.ends_with("Shoe") or mesh_node.name.ends_with("KneePad") or mesh_node.name.ends_with("ElbowArmor")
+		var material: StandardMaterial3D
 		if mesh_node.name == "Head":
-			mesh_node.material_override = _material(palette[2], 0.55)
-		elif mesh_node.name == "Torso" or mesh_node.name.ends_with("Shoe"):
-			mesh_node.material_override = _material(palette[1], 0.3)
+			material = _material(palette[2], 0.5)
+		elif accent_part:
+			material = _material(palette[1], 0.28)
+			if mesh_node.name in ["Visor", "ChestCore"]:
+				material.emission_enabled = true
+				material.emission = palette[1]
+				material.emission_energy_multiplier = 0.65
 		else:
-			mesh_node.material_override = _material(palette[0], 0.42)
+			material = _material(palette[0], 0.42)
+		mesh_node.material_override = material
 
 func _material(color: Color, rough: float) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
@@ -382,29 +472,101 @@ func _add_capsule(label: String, pos: Vector3, radius: float, height: float, mat
 	return node
 
 func _add_limb(label: String, pos: Vector3, radius: float, length: float, mat: Material) -> void:
+	var is_arm := label.ends_with("Arm")
+	var upper_length := length * (0.52 if is_arm else 0.50)
+	var lower_length := length - upper_length
 	var pivot := Node3D.new()
 	pivot.name = label + "Pivot"
 	pivot.position = pos
 	visual_root.add_child(pivot)
-	var limb_mesh := MeshInstance3D.new()
-	var cylinder := CylinderMesh.new()
-	cylinder.top_radius = radius
-	cylinder.bottom_radius = radius * 0.82
-	cylinder.height = length
-	limb_mesh.mesh = cylinder
-	limb_mesh.position.y = -length * 0.38
-	limb_mesh.material_override = mat
-	pivot.add_child(limb_mesh)
-	if label.ends_with("Leg"):
+
+	var upper := MeshInstance3D.new()
+	upper.name = label + "Upper"
+	var upper_shape := CapsuleMesh.new()
+	upper_shape.radius = radius
+	upper_shape.height = upper_length
+	upper.mesh = upper_shape
+	upper.position.y = -upper_length * 0.5
+	upper.material_override = mat
+	pivot.add_child(upper)
+
+	var joint := Node3D.new()
+	joint.name = label + ("Elbow" if is_arm else "Knee")
+	joint.position.y = -upper_length
+	pivot.add_child(joint)
+	var joint_mesh := MeshInstance3D.new()
+	joint_mesh.name = label + ("ElbowJoint" if is_arm else "KneeJoint")
+	var joint_shape := SphereMesh.new()
+	joint_shape.radius = radius * 1.12
+	joint_shape.height = radius * 2.24
+	joint_mesh.mesh = joint_shape
+	joint_mesh.material_override = mat
+	joint.add_child(joint_mesh)
+
+	var lower := MeshInstance3D.new()
+	lower.name = label + ("Forearm" if is_arm else "LowerLeg")
+	var lower_shape := CapsuleMesh.new()
+	lower_shape.radius = radius * 0.88
+	lower_shape.height = lower_length
+	lower.mesh = lower_shape
+	lower.position.y = -lower_length * 0.5
+	lower.material_override = mat
+	joint.add_child(lower)
+
+	if is_arm:
+		var elbow_armor := MeshInstance3D.new()
+		elbow_armor.name = label + "ElbowArmor"
+		var armor_shape := SphereMesh.new()
+		armor_shape.radius = radius * 1.35
+		armor_shape.height = radius * 1.6
+		elbow_armor.mesh = armor_shape
+		elbow_armor.position = Vector3(0, 0.0, -radius * 0.55)
+		elbow_armor.material_override = mat
+		joint.add_child(elbow_armor)
+		var hand := MeshInstance3D.new()
+		hand.name = label + "Glove"
+		var hand_shape := SphereMesh.new()
+		hand_shape.radius = radius * 1.12
+		hand_shape.height = radius * 2.1
+		hand.mesh = hand_shape
+		hand.position.y = -lower_length - 0.045
+		hand.material_override = mat
+		joint.add_child(hand)
+		arm_pivots.append(pivot)
+		arm_elbows.append(joint)
+	else:
+		var knee_pad := MeshInstance3D.new()
+		knee_pad.name = label + "KneePad"
+		var pad_shape := SphereMesh.new()
+		pad_shape.radius = radius * 1.4
+		pad_shape.height = radius * 1.45
+		knee_pad.mesh = pad_shape
+		knee_pad.position = Vector3(0, 0.0, -radius * 0.72)
+		knee_pad.material_override = mat
+		joint.add_child(knee_pad)
+		var foot := Node3D.new()
+		foot.name = label + "Ankle"
+		foot.position.y = -lower_length
+		joint.add_child(foot)
 		var shoe := MeshInstance3D.new()
 		shoe.name = label + "Shoe"
 		var shoe_mesh := BoxMesh.new()
-		shoe_mesh.size = Vector3(0.20, 0.13, 0.34)
+		shoe_mesh.size = Vector3(0.22, 0.13, 0.35)
 		shoe.mesh = shoe_mesh
-		shoe.position = Vector3(0, -length * 0.69, -0.075)
-		shoe.material_override = _material(Color(0.05, 0.72, 0.95), 0.38)
-		pivot.add_child(shoe)
-	limbs.append(pivot)
+		shoe.position = Vector3(0, -0.035, -0.105)
+		shoe.material_override = mat
+		foot.add_child(shoe)
+		var sole := MeshInstance3D.new()
+		sole.name = label + "Sole"
+		var sole_mesh := BoxMesh.new()
+		sole_mesh.size = Vector3(0.225, 0.035, 0.36)
+		sole.mesh = sole_mesh
+		sole.position = Vector3(0, -0.095, -0.105)
+		sole.material_override = _material(Color(0.018, 0.022, 0.03), 0.62)
+		foot.add_child(sole)
+		leg_pivots.append(pivot)
+		leg_knees.append(joint)
+		leg_feet.append(foot)
 
 func _add_box(label: String, pos: Vector3, size_value: Vector3, mat: Material) -> void:
 	var node := MeshInstance3D.new()
