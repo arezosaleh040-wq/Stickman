@@ -255,6 +255,15 @@ func _create_roads() -> void:
 		road.position.y = 0.045
 		road.material_override = road_mat
 		add_child(road)
+		var road_body := StaticBody3D.new()
+		road_body.name = "RoadCollision_%d" % axis
+		road_body.position = road.position
+		add_child(road_body)
+		var road_collision := CollisionShape3D.new()
+		var road_shape := BoxShape3D.new()
+		road_shape.size = road_mesh.size
+		road_collision.shape = road_shape
+		road_body.add_child(road_collision)
 
 	var sidewalk := _mat(Color(0.39,0.39,0.37),0.94)
 	for side in [-1.0,1.0]:
@@ -499,7 +508,7 @@ func _create_skin_preview() -> void:
 	pedestal.material_override = pedestal_mat
 	skin_preview_root.add_child(pedestal)
 	skin_preview_model = Node3D.new()
-	skin_preview_model.position.y = 0.18
+	skin_preview_model.position.y = 0.355
 	skin_preview_root.add_child(skin_preview_model)
 	_build_skin_preview_model()
 	var hint := Label.new()
@@ -910,6 +919,16 @@ func _add_road_surface(pos: Vector3, dimensions: Vector3, material: Material, la
 	mesh_instance.position = pos
 	mesh_instance.material_override = material
 	add_child(mesh_instance)
+	if label == "ArterialSidewalkV" or label == "ArterialSidewalkH":
+		var sidewalk_body := StaticBody3D.new()
+		sidewalk_body.name = label + "Collision"
+		sidewalk_body.position = pos
+		add_child(sidewalk_body)
+		var sidewalk_collision := CollisionShape3D.new()
+		var sidewalk_shape := BoxShape3D.new()
+		sidewalk_shape.size = dimensions
+		sidewalk_collision.shape = sidewalk_shape
+		sidewalk_body.add_child(sidewalk_collision)
 
 
 func _glow_material(color: Color) -> StandardMaterial3D:
@@ -1143,13 +1162,22 @@ func _add_windows(parent: Node3D, width: float, height: float, depth: float) -> 
 				parent.add_child(window)
 
 func _create_landmarks() -> void:
+	var plaza_body := StaticBody3D.new()
+	plaza_body.name = "CentralPlaza"
 	var plaza := MeshInstance3D.new()
 	var plaza_mesh := BoxMesh.new()
-	plaza_mesh.size = Vector3(25, 0.18, 25)
+	plaza_mesh.size = Vector3(25, 0.12, 25)
 	plaza.mesh = plaza_mesh
-	plaza.position = Vector3(0, 0.12, 0)
+	plaza.position = Vector3(0, 0.06, 0)
 	plaza.material_override = stone_material
-	add_child(plaza)
+	plaza_body.add_child(plaza)
+	var plaza_collision := CollisionShape3D.new()
+	var plaza_shape := BoxShape3D.new()
+	plaza_shape.size = plaza_mesh.size
+	plaza_collision.shape = plaza_shape
+	plaza_collision.position.y = 0.06
+	plaza_body.add_child(plaza_collision)
+	add_child(plaza_body)
 	var tower := StaticBody3D.new()
 	tower.name = "OldClockTower"
 	tower.position = Vector3(0, 9, -24)
@@ -1361,7 +1389,7 @@ func _spawn_service(title: String, info: String, kind: String, pos: Vector3, tin
 
 func _create_player() -> void:
 	var player := PLAYER_SCENE.instantiate()
-	player.position = Vector3(0, 1.2, 10)
+	player.position = Vector3(0, 0.14, 10)
 	add_child(player)
 
 func _create_world_hud() -> void:
