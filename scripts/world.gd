@@ -25,6 +25,10 @@ var skin_preview_container: SubViewportContainer
 var skin_preview_root: Node3D
 var skin_preview_model: Node3D
 var skin_preview_limbs: Array[Node3D] = []
+var skin_preview_arms: Array[Node3D] = []
+var skin_preview_arm_elbows: Array[Node3D] = []
+var skin_preview_legs: Array[Node3D] = []
+var skin_preview_leg_knees: Array[Node3D] = []
 var skin_preview_parts: Dictionary = {}
 var skin_preview_time := 0.0
 var skin_preview_dragging := false
@@ -403,9 +407,14 @@ func _skin_palettes() -> Array:
 		{"name":"SHADOW RUNNER","detail":"MIDNIGHT ARMOR  •  CYAN ENERGY","dark":Color(0.035,0.045,0.065),"accent":Color(0.0,0.78,1.0),"skin":Color(0.92,0.78,0.62)},
 		{"name":"INFERNO","detail":"EMBER CORE  •  CRIMSON GLOW","dark":Color(0.12,0.035,0.025),"accent":Color(1.0,0.24,0.055),"skin":Color(0.78,0.57,0.42)},
 		{"name":"TOXIC GHOST","detail":"DARK CAMO  •  NEON LIME","dark":Color(0.045,0.075,0.045),"accent":Color(0.48,0.95,0.23),"skin":Color(0.84,0.68,0.52)},
-		{"name":"VOID REAPER","detail":"ABYSS SUIT  •  VIOLET PLASMA","dark":Color(0.035,0.025,0.075),"accent":Color(0.72,0.25,1.0),"skin":Color(0.72,0.63,0.57)}
+		{"name":"VOID REAPER","detail":"ABYSS SUIT  •  VIOLET PLASMA","dark":Color(0.035,0.025,0.075),"accent":Color(0.72,0.25,1.0),"skin":Color(0.72,0.63,0.57)},
+		{"name":"FROST SENTINEL","detail":"GLACIER PLATE  •  ARCTIC BLUE","dark":Color(0.055,0.11,0.18),"accent":Color(0.32,0.86,1.0),"skin":Color(0.83,0.9,0.96)},
+		{"name":"CRIMSON RONIN","detail":"SHOGUN ARMOR  •  SCARLET EDGE","dark":Color(0.16,0.025,0.045),"accent":Color(1.0,0.12,0.18),"skin":Color(0.9,0.69,0.55)},
+		{"name":"SOLAR KNIGHT","detail":"ROYAL GOLD  •  SUNFIRE CORE","dark":Color(0.16,0.12,0.045),"accent":Color(1.0,0.72,0.18),"skin":Color(0.92,0.77,0.58)},
+		{"name":"PHANTOM CIRCUIT","detail":"STEALTH WEAVE  •  MAGENTA PULSE","dark":Color(0.085,0.025,0.12),"accent":Color(1.0,0.14,0.62),"skin":Color(0.89,0.72,0.68)},
+		{"name":"OCEAN WARDEN","detail":"DEEP-SEA ARMOR  •  TURQUOISE","dark":Color(0.02,0.10,0.11),"accent":Color(0.0,0.88,0.78),"skin":Color(0.72,0.82,0.75)},
+		{"name":"OBSIDIAN TITAN","detail":"FORGED BLACK  •  AMBER REACTOR","dark":Color(0.08,0.065,0.04),"accent":Color(1.0,0.52,0.1),"skin":Color(0.72,0.60,0.48)}
 	]
-
 
 func _create_skin_preview() -> void:
 	var card := PanelContainer.new()
@@ -503,10 +512,11 @@ func _create_skin_preview() -> void:
 
 
 func _build_skin_preview_model() -> void:
-	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,3)]
+	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,9)]
 	var dark_mat := _skin_material(palette.dark,0.34)
 	var accent_mat := _skin_material(palette.accent,0.24)
 	var skin_mat := _skin_material(palette.skin,0.48)
+
 	var torso := _skin_mesh("PreviewTorso",CapsuleMesh.new(),Vector3(0,1.15,0),accent_mat)
 	(torso.mesh as CapsuleMesh).radius = 0.22
 	(torso.mesh as CapsuleMesh).height = 0.82
@@ -517,45 +527,84 @@ func _build_skin_preview_model() -> void:
 	skin_preview_model.add_child(head)
 	skin_preview_parts["Head"] = head
 	skin_preview_parts["Torso"] = torso
+
 	var visor := _skin_mesh("EnergyVisor",BoxMesh.new(),Vector3(0,1.88,-0.245),accent_mat)
-	(visor.mesh as BoxMesh).size = Vector3(0.39,0.085,0.055)
+	(visor.mesh as BoxMesh).size = Vector3(0.40,0.085,0.06)
 	skin_preview_model.add_child(visor)
 	skin_preview_parts["Visor"] = visor
+	var chest_core := _skin_mesh("ChestReactor",CylinderMesh.new(),Vector3(0,1.20,-0.215),accent_mat)
+	(chest_core.mesh as CylinderMesh).top_radius = 0.105
+	(chest_core.mesh as CylinderMesh).bottom_radius = 0.105
+	(chest_core.mesh as CylinderMesh).height = 0.055
+	chest_core.rotation.x = PI * 0.5
+	skin_preview_model.add_child(chest_core)
+	skin_preview_parts["ChestCore"] = chest_core
+
 	var hip := _skin_mesh("PreviewHip",CapsuleMesh.new(),Vector3(0,0.72,0),dark_mat)
 	(hip.mesh as CapsuleMesh).radius = 0.19
 	(hip.mesh as CapsuleMesh).height = 0.3
 	skin_preview_model.add_child(hip)
 	for side in [-1.0,1.0]:
+		var shoulder := _skin_mesh("ShoulderArmor",SphereMesh.new(),Vector3(side*0.29,1.48,0),accent_mat)
+		(shoulder.mesh as SphereMesh).radius = 0.19
+		(shoulder.mesh as SphereMesh).height = 0.22
+		shoulder.scale = Vector3(1.0,0.75,0.85)
+		skin_preview_model.add_child(shoulder)
+		skin_preview_parts["ShoulderArmor"] = shoulder
+
 		var arm_pivot := Node3D.new()
-		arm_pivot.position = Vector3(side*0.28,1.43,0)
+		arm_pivot.position = Vector3(side*0.29,1.43,0)
 		skin_preview_model.add_child(arm_pivot)
-		var arm := _skin_mesh("Arm",CapsuleMesh.new(),Vector3(0,-0.29,0),dark_mat)
-		(arm.mesh as CapsuleMesh).radius = 0.105
-		(arm.mesh as CapsuleMesh).height = 0.68
-		arm_pivot.add_child(arm)
-		skin_preview_limbs.append(arm_pivot)
+		var upper_arm := _skin_mesh("UpperArm",CapsuleMesh.new(),Vector3(0,-0.19,0),dark_mat)
+		(upper_arm.mesh as CapsuleMesh).radius = 0.105
+		(upper_arm.mesh as CapsuleMesh).height = 0.40
+		arm_pivot.add_child(upper_arm)
+		var elbow := Node3D.new()
+		elbow.position.y = -0.37
+		arm_pivot.add_child(elbow)
+		var forearm := _skin_mesh("Forearm",CapsuleMesh.new(),Vector3(0,-0.16,0),dark_mat)
+		(forearm.mesh as CapsuleMesh).radius = 0.09
+		(forearm.mesh as CapsuleMesh).height = 0.34
+		elbow.add_child(forearm)
+		var glove := _skin_mesh("Glove",SphereMesh.new(),Vector3(0,-0.34,-0.015),accent_mat)
+		(glove.mesh as SphereMesh).radius = 0.095
+		(glove.mesh as SphereMesh).height = 0.15
+		elbow.add_child(glove)
+		skin_preview_arms.append(arm_pivot)
+		skin_preview_arm_elbows.append(elbow)
+
 		var leg_pivot := Node3D.new()
 		leg_pivot.position = Vector3(side*0.12,0.66,0)
 		skin_preview_model.add_child(leg_pivot)
-		var leg := _skin_mesh("Leg",CapsuleMesh.new(),Vector3(0,-0.31,0),dark_mat)
-		(leg.mesh as CapsuleMesh).radius = 0.115
-		(leg.mesh as CapsuleMesh).height = 0.72
-		leg_pivot.add_child(leg)
-		var boot := _skin_mesh("Boot",BoxMesh.new(),Vector3(0,-0.65,-0.09),accent_mat)
-		(boot.mesh as BoxMesh).size = Vector3(0.23,0.14,0.36)
-		leg_pivot.add_child(boot)
-		skin_preview_limbs.append(leg_pivot)
-	var shoulder := _skin_mesh("ShoulderArmor",SphereMesh.new(),Vector3(0,1.48,0),accent_mat)
-	(shoulder.mesh as SphereMesh).radius = 0.34
-	(shoulder.mesh as SphereMesh).height = 0.2
-	shoulder.scale = Vector3(1.2,0.55,0.8)
-	skin_preview_model.add_child(shoulder)
+		var upper_leg := _skin_mesh("UpperLeg",CapsuleMesh.new(),Vector3(0,-0.19,0),dark_mat)
+		(upper_leg.mesh as CapsuleMesh).radius = 0.115
+		(upper_leg.mesh as CapsuleMesh).height = 0.40
+		leg_pivot.add_child(upper_leg)
+		var knee := Node3D.new()
+		knee.position.y = -0.38
+		leg_pivot.add_child(knee)
+		var knee_guard := _skin_mesh("KneeGuard",SphereMesh.new(),Vector3(0,0,-0.085),accent_mat)
+		(knee_guard.mesh as SphereMesh).radius = 0.12
+		(knee_guard.mesh as SphereMesh).height = 0.14
+		knee.add_child(knee_guard)
+		var lower_leg := _skin_mesh("LowerLeg",CapsuleMesh.new(),Vector3(0,-0.19,0),dark_mat)
+		(lower_leg.mesh as CapsuleMesh).radius = 0.10
+		(lower_leg.mesh as CapsuleMesh).height = 0.39
+		knee.add_child(lower_leg)
+		var boot := _skin_mesh("Boot",BoxMesh.new(),Vector3(0,-0.39,-0.10),accent_mat)
+		(boot.mesh as BoxMesh).size = Vector3(0.25,0.15,0.38)
+		knee.add_child(boot)
+		skin_preview_legs.append(leg_pivot)
+		skin_preview_leg_knees.append(knee)
+
+	var shoulder_line := _skin_mesh("ChestArmorTrim",BoxMesh.new(),Vector3(0,1.48,-0.205),accent_mat)
+	(shoulder_line.mesh as BoxMesh).size = Vector3(0.38,0.065,0.05)
+	skin_preview_model.add_child(shoulder_line)
 	var cape := _skin_mesh("PreviewCape",BoxMesh.new(),Vector3(0,1.12,0.19),dark_mat)
-	(cape.mesh as BoxMesh).size = Vector3(0.62,0.98,0.07)
+	(cape.mesh as BoxMesh).size = Vector3(0.72,1.02,0.075)
 	cape.rotation.x = -0.12
 	skin_preview_model.add_child(cape)
 	skin_preview_parts["Cape"] = cape
-
 
 func _skin_mesh(label: String, mesh: Mesh, position_value: Vector3, material: Material) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
@@ -577,14 +626,25 @@ func _skin_material(color: Color, roughness_value: float) -> StandardMaterial3D:
 func _apply_skin_preview_palette() -> void:
 	if skin_preview_parts.is_empty():
 		return
-	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,3)]
+	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,9)]
 	var preview_title := menu_root.find_child("SkinPreviewTitle",true,false) as Label
 	if preview_title:
 		preview_title.text = str(palette.name) + "  •  3D SKIN PREVIEW"
 	for part_name in skin_preview_parts:
 		var node: MeshInstance3D = skin_preview_parts[part_name]
-		var tint: Color = palette.skin if part_name == "Head" else (palette.accent if part_name == "Torso" or part_name == "Visor" else palette.dark)
-		node.material_override = _skin_material(tint,0.3)
+		var tint: Color
+		if part_name == "Head":
+			tint = palette.skin
+		elif part_name in ["Torso","Visor","ChestCore","ShoulderArmor"]:
+			tint = palette.accent
+		else:
+			tint = palette.dark
+		var material := _skin_material(tint,0.3)
+		if part_name in ["Visor","ChestCore"]:
+			material.emission_enabled = true
+			material.emission = palette.accent
+			material.emission_energy_multiplier = 0.9
+		node.material_override = material
 
 
 func _animate_skin_preview(delta: float) -> void:
@@ -593,14 +653,19 @@ func _animate_skin_preview(delta: float) -> void:
 	skin_preview_time += delta
 	var pulse := sin(skin_preview_time*2.8)
 	skin_preview_model.position.y = 0.18 + sin(skin_preview_time*1.7)*0.045
-	skin_preview_model.rotation.y += delta*0.18
-	for i in range(skin_preview_limbs.size()):
-		var phase := skin_preview_time*2.0 + (PI if i%2 == 1 else 0.0)
-		if i < 2:
-			skin_preview_limbs[i].rotation.z = sin(phase)*0.16 + pulse*0.025
-		else:
-			skin_preview_limbs[i].rotation.x = sin(phase)*0.10
-	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,3)]
+	skin_preview_model.rotation.y += delta*0.13
+	for i in range(skin_preview_arms.size()):
+		var arm_phase := skin_preview_time*1.55 + (PI if i == 1 else 0.0)
+		skin_preview_arms[i].rotation.x = sin(arm_phase)*0.075
+		skin_preview_arms[i].rotation.z = (-0.035 if i == 0 else 0.035) + sin(arm_phase*0.5)*0.018
+		if i < skin_preview_arm_elbows.size():
+			skin_preview_arm_elbows[i].rotation.x = 0.12 + maxf(0.0,sin(arm_phase))*0.05
+	for i in range(skin_preview_legs.size()):
+		var leg_phase := skin_preview_time*1.55 + (PI if i == 1 else 0.0)
+		skin_preview_legs[i].rotation.x = sin(leg_phase)*0.045
+		if i < skin_preview_leg_knees.size():
+			skin_preview_leg_knees[i].rotation.x = maxf(0.0,-cos(leg_phase))*0.07
+	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,9)]
 	if skin_preview_parts.has("Visor"):
 		var visor: MeshInstance3D = skin_preview_parts["Visor"]
 		var material := visor.material_override as StandardMaterial3D
@@ -608,7 +673,11 @@ func _animate_skin_preview(delta: float) -> void:
 			material.emission_enabled = true
 			material.emission = palette.accent
 			material.emission_energy_multiplier = 0.7 + absf(pulse)*1.4
-
+	if skin_preview_parts.has("ChestCore"):
+		var reactor: MeshInstance3D = skin_preview_parts["ChestCore"]
+		var reactor_material := reactor.material_override as StandardMaterial3D
+		if reactor_material:
+			reactor_material.emission_energy_multiplier = 0.65 + absf(pulse)*1.55
 
 func _on_skin_preview_gui_input(event: InputEvent) -> void:
 	if event is InputEventScreenDrag:
@@ -743,7 +812,7 @@ func _refresh_skin_name_display() -> void:
 	if skin_studio_panel == null or not is_instance_valid(skin_studio_panel):
 		return
 	var name_label := skin_studio_panel.find_child("SelectedSkinName",true,false) as Label
-	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,3)]
+	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,9)]
 	if name_label:
 		name_label.text = str(palette.name)
 	if skin_details_label:
