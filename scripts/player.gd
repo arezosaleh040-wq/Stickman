@@ -138,7 +138,7 @@ func _physics_process(delta: float) -> void:
 		velocity.x = move_toward(velocity.x, 0.0, braking * delta)
 		velocity.z = move_toward(velocity.z, 0.0, braking * delta)
 
-	camera_pivot.position.y = 1.12 if crouching else 1.55
+	camera_pivot.position.y = lerpf(camera_pivot.position.y, 1.12 if crouching else 1.55, delta * 10.0)
 
 	if jump_buffer_timer > 0.0 and coyote_timer > 0.0 and not crouching:
 		velocity.y = jump_velocity
