@@ -327,6 +327,26 @@ func _build_character() -> void:
 	_add_limb("LeftLeg", Vector3(-0.1, 0.48, 0), 0.09, 0.7, dark)
 	_add_limb("RightLeg", Vector3(0.1, 0.48, 0), 0.09, 0.7, dark)
 	_build_cape()
+	apply_selected_skin()
+
+func apply_selected_skin() -> void:
+	if visual_root == null:
+		return
+	var palettes := [
+		[Color(0.035, 0.045, 0.065), Color(0.0, 0.78, 1.0), Color(0.92, 0.78, 0.62)],
+		[Color(0.12, 0.035, 0.025), Color(1.0, 0.24, 0.055), Color(0.78, 0.57, 0.42)],
+		[Color(0.045, 0.075, 0.045), Color(0.48, 0.95, 0.23), Color(0.84, 0.68, 0.52)],
+		[Color(0.035, 0.025, 0.075), Color(0.72, 0.25, 1.0), Color(0.72, 0.63, 0.57)]
+	]
+	var palette: Array = palettes[clampi(GameState.character_skin, 0, palettes.size() - 1)]
+	for node in visual_root.find_children("*", "MeshInstance3D", true, false):
+		var mesh_node := node as MeshInstance3D
+		if mesh_node.name == "Head":
+			mesh_node.material_override = _material(palette[2], 0.55)
+		elif mesh_node.name == "Torso" or mesh_node.name.ends_with("Shoe"):
+			mesh_node.material_override = _material(palette[1], 0.3)
+		else:
+			mesh_node.material_override = _material(palette[0], 0.42)
 
 func _material(color: Color, rough: float) -> StandardMaterial3D:
 	var mat := StandardMaterial3D.new()
