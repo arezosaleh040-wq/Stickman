@@ -7,6 +7,8 @@ signal inventory_changed()
 
 var money := 250
 var experience := 0
+var character_skin := 0
+var character_name := "SHADOW RUNNER"
 var cash_wallet := 85
 var bank_balance := 0
 var wanted_level := 0
@@ -60,6 +62,8 @@ func to_dictionary() -> Dictionary:
 	return {
 		"money": money,
 		"experience": experience,
+		"character_skin": character_skin,
+		"character_name": character_name,
 		"cash_wallet": cash_wallet,
 		"bank_balance": bank_balance,
 		"wanted_level": wanted_level,
@@ -76,6 +80,8 @@ func to_dictionary() -> Dictionary:
 func from_dictionary(data: Dictionary) -> void:
 	money = int(data.get("money", 250))
 	experience = int(data.get("experience", 0))
+	character_skin = clampi(int(data.get("character_skin", 0)), 0, 3)
+	character_name = str(data.get("character_name", "SHADOW RUNNER"))
 	cash_wallet = int(data.get("cash_wallet", 85))
 	bank_balance = int(data.get("bank_balance", 0))
 	wanted_level = int(data.get("wanted_level", 0))
