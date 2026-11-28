@@ -18,79 +18,153 @@ var previous_position := Vector3.ZERO
 var activity_anchor := Vector3.ZERO
 var activity_name := "Exploring the district"
 var routine_phase := -1
+var steering_direction := Vector3.ZERO
+var repath_cooldown := 0.0
+var flee_repath_cooldown := 0.0
 @export_range(0.0, 1.0) var schedule_offset := 0.0
+
+const ARRIVAL_DISTANCE := 0.72
+const PROBE_DISTANCE := 1.75
+const STEER_ACCELERATION := 5.5
+const STOP_ACCELERATION := 8.5
 
 func _ready() -> void:
 	add_to_group("interactables")
-	floor_snap_length = 0.3
-	safe_margin = 0.04
+	add_to_group("town_npcs")
+	floor_snap_length = 0.45
+	safe_margin = 0.025
+	max_slides = 6
+	floor_max_angle = deg_to_rad(48.0)
 	home_position = global_position
 	previous_position = global_position
 	_build_appearance()
 	activity_anchor = home_position
 	_sync_daily_routine(true)
 	_choose_destination()
+	# Residents should not physically lock one another in narrow streets.
+	for other in get_tree().get_nodes_in_group("town_npcs"):
+		if other != self and other is PhysicsBody3D:
+			add_collision_exception_with(other)
 
 func _physics_process(delta: float) -> void:
+	repath_cooldown = maxf(0.0, repath_cooldown - delta)
+	flee_repath_cooldown = maxf(0.0, flee_repath_cooldown - delta)
 	_sync_daily_routine()
+
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	else:
 		velocity.y = 0.0
+
 	var player := get_tree().get_first_node_in_group("player") as Node3D
-	var fleeing := false
-	if GameState.wanted_level > 0 and player != null and global_position.distance_to(player.global_position) < 22.0:
+	var fleeing := GameState.wanted_level > 0 and player != null and global_position.distance_to(player.global_position) < 22.0
+	if fleeing and flee_repath_cooldown <= 0.0:
 		var away := global_position - player.global_position
 		away.y = 0.0
 		if away.length_squared() < 0.01:
 			away = Vector3.RIGHT
-		target_position = global_position + away.normalized() * 14.0
+		target_position = global_position + away.normalized() * 13.0
 		wait_time = 0.0
-		fleeing = true
+		flee_repath_cooldown = 0.55
 
-	var flat_target := target_position - global_position
-	flat_target.y = 0.0
-	if wait_time > 0.0 and not fleeing:
+	var to_target := target_position - global_position
+	to_target.y = 0.0
+	var distance_to_target := to_target.length()
+	var desired_direction := Vector3.ZERO
+
+	if fleeing:
+		desired_direction = _steer_around_obstacles(to_target.normalized())
+		wait_time = 0.0
+	elif wait_time > 0.0:
 		wait_time = maxf(0.0, wait_time - delta)
-		velocity.x = move_toward(velocity.x, 0.0, 5.0 * delta)
-		velocity.z = move_toward(velocity.z, 0.0, 5.0 * delta)
-	elif flat_target.length() < 0.9:
+	elif distance_to_target <= ARRIVAL_DISTANCE:
 		_choose_destination()
 	else:
-		var direction := flat_target.normalized()
-		var ray := PhysicsRayQueryParameters3D.create(global_position + Vector3.UP * 0.8, global_position + Vector3.UP * 0.8 + direction * 1.35)
-		ray.exclude = [self]
-		var obstacle := get_world_3d().direct_space_state.intersect_ray(ray)
-		if not obstacle.is_empty():
+		desired_direction = _steer_around_obstacles(to_target.normalized())
+		if desired_direction == Vector3.ZERO and repath_cooldown <= 0.0:
 			_choose_destination()
-		else:
-			var current_speed := move_speed * (1.7 if fleeing else 1.0)
-			velocity.x = move_toward(velocity.x, direction.x * current_speed, 7.0 * delta)
-			velocity.z = move_toward(velocity.z, direction.z * current_speed, 7.0 * delta)
-			look_at(global_position + direction, Vector3.UP)
+			repath_cooldown = 0.35
+
+	if desired_direction != Vector3.ZERO:
+		steering_direction = steering_direction.lerp(desired_direction, minf(delta * 5.0, 1.0)).normalized()
+		var current_speed := move_speed * (1.45 if fleeing else 1.0)
+		var target_velocity := steering_direction * current_speed
+		velocity.x = move_toward(velocity.x, target_velocity.x, STEER_ACCELERATION * delta)
+		velocity.z = move_toward(velocity.z, target_velocity.z, STEER_ACCELERATION * delta)
+		var target_yaw := atan2(-steering_direction.x, -steering_direction.z)
+		rotation.y = lerp_angle(rotation.y, target_yaw, minf(delta * 7.0, 1.0))
+	else:
+		steering_direction = steering_direction.lerp(Vector3.ZERO, minf(delta * 7.0, 1.0))
+		velocity.x = move_toward(velocity.x, 0.0, STOP_ACCELERATION * delta)
+		velocity.z = move_toward(velocity.z, 0.0, STOP_ACCELERATION * delta)
+
 	move_and_slide()
-	if is_on_wall():
+
+	if is_on_wall() and repath_cooldown <= 0.0:
 		_choose_destination()
-		stuck_time = 0.0
+		repath_cooldown = 0.45
+
 	_wrap_world_edges()
 	var moved_distance := global_position.distance_to(previous_position)
-	if moved_distance < 0.012 and flat_target.length() > 1.0 and wait_time <= 0.0:
+	var horizontal_speed := Vector2(velocity.x, velocity.z).length()
+	if moved_distance < 0.008 and distance_to_target > 1.0 and wait_time <= 0.0 and desired_direction != Vector3.ZERO:
 		stuck_time += delta
 	else:
-		stuck_time = 0.0
-	if stuck_time > 0.65:
+		stuck_time = maxf(0.0, stuck_time - delta * 1.5)
+	if stuck_time > 1.1 and repath_cooldown <= 0.0:
 		_choose_destination()
 		stuck_time = 0.0
+		repath_cooldown = 0.6
 	previous_position = global_position
 
-	var movement_speed := Vector2(velocity.x, velocity.z).length()
-	if movement_speed > 0.12:
-		walk_clock += delta * (12.0 if fleeing else 10.0)
-	var swing := sin(walk_clock) * clampf(movement_speed / maxf(move_speed, 0.1), 0.0, 1.35) * 0.48
+	if horizontal_speed > 0.10:
+		walk_clock += delta * (12.0 if fleeing else 9.5) * clampf(horizontal_speed / maxf(move_speed, 0.1), 0.7, 1.5)
+	var swing := sin(walk_clock) * clampf(horizontal_speed / maxf(move_speed, 0.1), 0.0, 1.25) * 0.43
+	var anim_weight := clampf(horizontal_speed / maxf(move_speed, 0.1), 0.0, 1.0)
 	for index in range(arm_pivots.size()):
-		arm_pivots[index].rotation.x = swing if index == 0 else -swing
+		var target_swing := swing if index == 0 else -swing
+		arm_pivots[index].rotation.x = lerpf(arm_pivots[index].rotation.x, target_swing, minf(delta * 10.0, 1.0))
 	for index in range(leg_pivots.size()):
-		leg_pivots[index].rotation.x = -swing if index == 0 else swing
+		var target_leg := -swing if index == 0 else swing
+		leg_pivots[index].rotation.x = lerpf(leg_pivots[index].rotation.x, target_leg, minf(delta * 10.0, 1.0))
+
+func _steer_around_obstacles(desired: Vector3) -> Vector3:
+	if desired.length_squared() < 0.001:
+		return Vector3.ZERO
+	var space := get_world_3d().direct_space_state
+	var origin := global_position + Vector3.UP * 0.82
+	var right := Vector3(-desired.z, 0.0, desired.x)
+	var excluded: Array[RID] = [get_rid()]
+	var player := get_tree().get_first_node_in_group("player")
+	if player is CollisionObject3D:
+		excluded.append(player.get_rid())
+	for resident in get_tree().get_nodes_in_group("town_npcs"):
+		if resident is CollisionObject3D:
+			excluded.append(resident.get_rid())
+
+	var center_clear := _probe_clear(space, origin, desired, excluded, PROBE_DISTANCE)
+	if center_clear:
+		return desired
+
+	var left := (desired - right * 0.82).normalized()
+	var right_dir := (desired + right * 0.82).normalized()
+	var left_clear := _probe_clear(space, origin, left, excluded, PROBE_DISTANCE * 0.9)
+	var right_clear := _probe_clear(space, origin, right_dir, excluded, PROBE_DISTANCE * 0.9)
+	if left_clear and right_clear:
+		# Prefer the side that requires the smaller change from the current heading.
+		return left if steering_direction.dot(left) >= steering_direction.dot(right_dir) else right_dir
+	if left_clear:
+		return left
+	if right_clear:
+		return right_dir
+	return Vector3.ZERO
+
+func _probe_clear(space: PhysicsDirectSpaceState3D, origin: Vector3, direction: Vector3, excluded: Array[RID], distance: float) -> bool:
+	var query := PhysicsRayQueryParameters3D.create(origin, origin + direction * distance)
+	query.exclude = excluded
+	query.collide_with_areas = false
+	var hit := space.intersect_ray(query)
+	return hit.is_empty()
 
 func _wrap_world_edges() -> void:
 	var wrapped := global_position
@@ -148,6 +222,7 @@ func _sync_daily_routine(force: bool = false) -> void:
 			activity_anchor = home_position
 	target_position = Vector3(activity_anchor.x, global_position.y, activity_anchor.z)
 	wait_time = 0.0
+	repath_cooldown = 0.0
 
 func _choose_destination() -> void:
 	var offset := Vector3(randf_range(-7.5, 7.5), 0.0, randf_range(-7.5, 7.5))
@@ -155,7 +230,7 @@ func _choose_destination() -> void:
 	if global_position.distance_to(home_position) > minf(wander_radius, 95.0):
 		candidate = activity_anchor
 	target_position = Vector3(candidate.x, global_position.y, candidate.z)
-	wait_time = randf_range(0.35, 1.15)
+	wait_time = randf_range(0.25, 0.8)
 
 func _build_appearance() -> void:
 	var outfit_colors := [Color(0.12,0.36,0.62),Color(0.56,0.22,0.16),Color(0.18,0.43,0.31),Color(0.42,0.30,0.52),Color(0.68,0.48,0.19)]
