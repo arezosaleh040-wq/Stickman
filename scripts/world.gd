@@ -360,9 +360,10 @@ func _show_main_menu() -> void:
 	var center := CenterContainer.new()
 	center.name = "MainMenuCenter"
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	center.anchor_right = 0.53
 	menu_root.add_child(center)
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(390,360)
+	panel.custom_minimum_size = Vector2(390,420)
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.018,0.04,0.07,0.94)
 	panel_style.border_color = Color(0.12,0.63,0.88,0.9)
@@ -428,6 +429,7 @@ func _create_skin_preview() -> void:
 	column.add_theme_constant_override("separation",5)
 	card.add_child(column)
 	var title := Label.new()
+	title.name = "SkinPreviewTitle"
 	title.text = "3D CHARACTER PREVIEW"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size",18)
@@ -576,6 +578,9 @@ func _apply_skin_preview_palette() -> void:
 	if skin_preview_parts.is_empty():
 		return
 	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,3)]
+	var preview_title := menu_root.find_child("SkinPreviewTitle",true,false) as Label
+	if preview_title:
+		preview_title.text = str(palette.name) + "  •  3D SKIN PREVIEW"
 	for part_name in skin_preview_parts:
 		var node: MeshInstance3D = skin_preview_parts[part_name]
 		var tint: Color = palette.skin if part_name == "Head" else (palette.accent if part_name == "Torso" or part_name == "Visor" else palette.dark)
