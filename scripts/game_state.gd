@@ -80,7 +80,7 @@ func to_dictionary() -> Dictionary:
 func from_dictionary(data: Dictionary) -> void:
 	money = int(data.get("money", 250))
 	experience = int(data.get("experience", 0))
-	character_skin = clampi(int(data.get("character_skin", 0)), 0, 3)
+	character_skin = clampi(int(data.get("character_skin", 0)), 0, 9)
 	character_name = str(data.get("character_name", "SHADOW RUNNER"))
 	cash_wallet = int(data.get("cash_wallet", 85))
 	bank_balance = int(data.get("bank_balance", 0))
