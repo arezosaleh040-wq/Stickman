@@ -1525,13 +1525,15 @@ func _create_residents() -> void:
 		["Evan the Musician", "You can explore the side streets beyond the plaza.", Vector3(27.25, 0.1, 8.0)],
 		["Sana the Gardener", "The small parks are tucked between the city blocks.", Vector3(-27.25, 0.1, -8.0)]
 	]
-	for resident in residents:
+	for resident_index in range(residents.size()):
+		var resident: Array = residents[resident_index]
 		var npc := CharacterBody3D.new()
 		npc.set_script(load("res://scripts/npc.gd"))
 		npc.set("display_name", resident[0])
 		npc.set("dialogue", resident[1])
 		npc.set("wander_radius", 105.0)
-		npc.set("move_speed", 1.65)
+		npc.set("move_speed", 1.42 + float(resident_index % 4) * 0.13)
+		npc.set("schedule_offset", float(resident_index) * 0.087)
 		npc.position = resident[2]
 		add_child(npc)
 
