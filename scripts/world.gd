@@ -1166,16 +1166,16 @@ func _create_landmarks() -> void:
 	plaza_body.name = "CentralPlaza"
 	var plaza := MeshInstance3D.new()
 	var plaza_mesh := BoxMesh.new()
-	plaza_mesh.size = Vector3(25, 0.12, 25)
+	plaza_mesh.size = Vector3(25, 0.09, 25)
 	plaza.mesh = plaza_mesh
-	plaza.position = Vector3(0, 0.06, 0)
+	plaza.position = Vector3(0, 0.045, 0)
 	plaza.material_override = stone_material
 	plaza_body.add_child(plaza)
 	var plaza_collision := CollisionShape3D.new()
 	var plaza_shape := BoxShape3D.new()
 	plaza_shape.size = plaza_mesh.size
 	plaza_collision.shape = plaza_shape
-	plaza_collision.position.y = 0.06
+	plaza_collision.position.y = 0.045
 	plaza_body.add_child(plaza_collision)
 	add_child(plaza_body)
 	var tower := StaticBody3D.new()
