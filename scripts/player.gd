@@ -341,6 +341,8 @@ func apply_selected_skin() -> void:
 	var palette: Array = palettes[clampi(GameState.character_skin, 0, palettes.size() - 1)]
 	for node in visual_root.find_children("*", "MeshInstance3D", true, false):
 		var mesh_node := node as MeshInstance3D
+		if mesh_node.name == "AnimatedFabric" or mesh_node.name == "CapeCollar":
+			continue
 		if mesh_node.name == "Head":
 			mesh_node.material_override = _material(palette[2], 0.55)
 		elif mesh_node.name == "Torso" or mesh_node.name.ends_with("Shoe"):
