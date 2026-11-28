@@ -1,11 +1,11 @@
 extends CharacterBody3D
 
-@export var walk_speed := 6.2
-@export var sprint_speed := 10.0
-@export var jump_velocity := 6.6
+@export var walk_speed := 5.8
+@export var sprint_speed := 8.6
+@export var jump_velocity := 5.8
 @export var mouse_sensitivity := 0.0022
-@export var acceleration := 34.0
-@export var braking := 15.0
+@export var acceleration := 24.0
+@export var braking := 19.0
 @export var crouch_speed := 2.8
 var touch_root: Control
 var touch_buttons: Dictionary = {}
@@ -114,9 +114,9 @@ func _physics_process(delta: float) -> void:
 		coyote_timer = maxf(0.0, coyote_timer - delta)
 		var gravity_multiplier := 1.0
 		if velocity.y > 0.0:
-			gravity_multiplier = 0.68 if Input.is_action_pressed("jump") else 1.32
+			gravity_multiplier = 0.92 if Input.is_action_pressed("jump") else 1.42
 		else:
-			gravity_multiplier = 1.18
+			gravity_multiplier = 1.22
 		velocity.y -= gravity * gravity_multiplier * delta
 
 	if Input.is_action_just_pressed("jump"):
@@ -272,13 +272,13 @@ func _animate_character(delta: float, input_vector: Vector2) -> void:
 	_update_cape_motion(delta, horizontal_speed, sprinting, airborne)
 
 func _assist_stair_step(direction: Vector3) -> void:
-	var horizontal_motion := direction.normalized() * 0.25
+	var horizontal_motion := direction.normalized() * 0.18
 	if not test_move(global_transform, horizontal_motion):
 		return
 	var raised_transform := global_transform
-	raised_transform.origin.y += 0.16
+	raised_transform.origin.y += 0.10
 	if not test_move(raised_transform, horizontal_motion):
-		global_position.y += 0.16
+		global_position.y += 0.10
 
 
 func _build_cape() -> void:
@@ -474,7 +474,7 @@ func _add_capsule(label: String, pos: Vector3, radius: float, height: float, mat
 func _add_limb(label: String, pos: Vector3, radius: float, length: float, mat: Material) -> void:
 	var is_arm := label.ends_with("Arm")
 	var upper_length := length * (0.52 if is_arm else 0.50)
-	var lower_length := length - upper_length
+	var lower_length := length - upper_length - (0.12 if not is_arm else 0.0)
 	var pivot := Node3D.new()
 	pivot.name = label + "Pivot"
 	pivot.position = pos
@@ -553,7 +553,7 @@ func _add_limb(label: String, pos: Vector3, radius: float, length: float, mat: M
 		var shoe_mesh := BoxMesh.new()
 		shoe_mesh.size = Vector3(0.22, 0.13, 0.35)
 		shoe.mesh = shoe_mesh
-		shoe.position = Vector3(0, -0.035, -0.105)
+		shoe.position = Vector3(0, -0.02, -0.105)
 		shoe.material_override = mat
 		foot.add_child(shoe)
 		var sole := MeshInstance3D.new()
@@ -561,7 +561,7 @@ func _add_limb(label: String, pos: Vector3, radius: float, length: float, mat: M
 		var sole_mesh := BoxMesh.new()
 		sole_mesh.size = Vector3(0.225, 0.035, 0.36)
 		sole.mesh = sole_mesh
-		sole.position = Vector3(0, -0.095, -0.105)
+		sole.position = Vector3(0, -0.075, -0.105)
 		sole.material_override = _material(Color(0.018, 0.022, 0.03), 0.62)
 		foot.add_child(sole)
 		leg_pivots.append(pivot)
