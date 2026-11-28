@@ -58,9 +58,9 @@ var inventory_hotbar_buttons: Array[Button] = []
 var storage_buttons: Array[Button] = []
 
 func _ready() -> void:
-	floor_snap_length = 0.38
-	safe_margin = 0.035
-	max_slides = 8
+	floor_snap_length = 0.22
+	safe_margin = 0.01
+	max_slides = 6
 	add_to_group("player")
 	_add_input_actions()
 	_build_character()
@@ -123,6 +123,8 @@ func _physics_process(delta: float) -> void:
 			AudioManager.play_jump()
 		else:
 			_try_parkour_jump(direction)
+	if direction.length() > 0.01 and is_on_floor() and velocity.y <= 0.0:
+		_assist_stair_step(direction)
 	move_and_slide()
 	if not was_on_floor and is_on_floor():
 		landing_bounce = 0.18
