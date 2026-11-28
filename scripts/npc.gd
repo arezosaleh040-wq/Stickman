@@ -15,6 +15,10 @@ var walk_clock := 0.0
 var gravity: float = ProjectSettings.get_setting("physics/3d/default_gravity")
 var stuck_time := 0.0
 var previous_position := Vector3.ZERO
+var activity_anchor := Vector3.ZERO
+var activity_name := "Exploring the district"
+var routine_phase := -1
+@export_range(0.0, 1.0) var schedule_offset := 0.0
 
 func _ready() -> void:
 	add_to_group("interactables")
@@ -23,9 +27,12 @@ func _ready() -> void:
 	home_position = global_position
 	previous_position = global_position
 	_build_appearance()
+	activity_anchor = home_position
+	_sync_daily_routine(true)
 	_choose_destination()
 
 func _physics_process(delta: float) -> void:
+	_sync_daily_routine()
 	if not is_on_floor():
 		velocity.y -= gravity * delta
 	else:
@@ -105,15 +112,50 @@ func _wrap_world_edges() -> void:
 		_choose_destination()
 
 func interact() -> String:
-	return display_name + ": " + dialogue
+	return display_name + " • " + activity_name + ": " + dialogue
+
+func _sync_daily_routine(force: bool = false) -> void:
+	var clock_value := 0.22
+	var world := get_parent()
+	if world != null:
+		var clock_data: Variant = world.get("day_clock")
+		if clock_data != null:
+			clock_value = float(clock_data)
+	var shifted_clock := fposmod(clock_value + schedule_offset, 1.0)
+	var hour := int(shifted_clock * 24.0)
+	var next_phase := 3
+	if hour >= 6 and hour < 10:
+		next_phase = 0
+	elif hour >= 10 and hour < 17:
+		next_phase = 1
+	elif hour >= 17 and hour < 22:
+		next_phase = 2
+	if not force and next_phase == routine_phase:
+		return
+	routine_phase = next_phase
+	match routine_phase:
+		0:
+			activity_name = "Morning commute"
+			activity_anchor = home_position + Vector3(4.0, 0.0, 2.5)
+		1:
+			activity_name = "At work"
+			activity_anchor = home_position + Vector3(-5.0, 0.0, 4.0)
+		2:
+			activity_name = "Evening walk"
+			activity_anchor = home_position + Vector3(3.0, 0.0, -5.0)
+		_:
+			activity_name = "Heading home"
+			activity_anchor = home_position
+	target_position = Vector3(activity_anchor.x, global_position.y, activity_anchor.z)
+	wait_time = 0.0
 
 func _choose_destination() -> void:
-	var offset := Vector3(randf_range(-18.0, 18.0), 0.0, randf_range(-18.0, 18.0))
-	var candidate := home_position + offset
+	var offset := Vector3(randf_range(-7.5, 7.5), 0.0, randf_range(-7.5, 7.5))
+	var candidate := activity_anchor + offset
 	if global_position.distance_to(home_position) > minf(wander_radius, 95.0):
-		candidate = home_position
+		candidate = activity_anchor
 	target_position = Vector3(candidate.x, global_position.y, candidate.z)
-	wait_time = randf_range(0.08, 0.28)
+	wait_time = randf_range(0.35, 1.15)
 
 func _build_appearance() -> void:
 	var outfit_colors := [Color(0.12,0.36,0.62),Color(0.56,0.22,0.16),Color(0.18,0.43,0.31),Color(0.42,0.30,0.52),Color(0.68,0.48,0.19)]
