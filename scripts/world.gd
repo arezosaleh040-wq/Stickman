@@ -46,6 +46,7 @@ func _ready() -> void:
 	_create_cloud_layers()
 	_create_ground()
 	_create_roads()
+	_create_pedestrian_overpasses()
 	_create_rolling_hills()
 	_set_loading_progress(35, "LOADING TERRAIN AND ROADS")
 	await get_tree().process_frame
@@ -887,13 +888,16 @@ func _start_game() -> void:
 
 func _create_traffic_system() -> void:
 	_create_city_streets()
-	_create_crosswalks()
-	_create_traffic_lights()
-	for axis in ["x","z"]:
-		for direction in [-1,1]:
-			for index in range(2):
-				var start := -96.0 + float(index)*48.0 if direction>0 else 96.0-float(index)*48.0
-				_create_traffic_car(axis,direction,start,index)
+	for index in range(8):
+		_create_traffic_car("x", 1, 0.0, index)
+		var car_data: Dictionary = traffic_cars[traffic_cars.size() - 1]
+		var angle := TAU * float(index) / 8.0
+		car_data["axis"] = "circle"
+		car_data["radius"] = 8.85
+		car_data["angle"] = angle
+		var car: Node3D = car_data["root"]
+		car.position = Vector3(cos(angle) * 8.85, 0.0, sin(angle) * 8.85)
+		car.look_at(car.position + Vector3(-sin(angle), 0.0, cos(angle)), Vector3.UP)
 
 
 func _create_city_streets() -> void:
@@ -1093,6 +1097,17 @@ func _update_traffic(delta: float) -> void:
 			(bulbs[i] as MeshInstance3D).material_override = materials[i] if active else _dim_traffic_material(i)
 	for car_data in traffic_cars:
 		var direction := int(car_data["direction"])
+		var car: Node3D = car_data["root"]
+		if car_data["axis"] == "circle":
+			var radius := float(car_data["radius"])
+			var angle := float(car_data["angle"]) + float(car_data["speed"]) * delta / radius
+			car_data["angle"] = fposmod(angle, TAU)
+			car.position = Vector3(cos(angle) * radius, 0.0, sin(angle) * radius)
+			car.look_at(car.position + Vector3(-sin(angle), 0.0, cos(angle)), Vector3.UP)
+			for child in car.get_children():
+				if child is MeshInstance3D and child.name == "Wheel":
+					child.rotate_x(delta * 7.0)
+			continue
 		var position_value := float(car_data["position"])
 		var state := x_state if car_data["axis"]=="x" else z_state
 		var near_line := position_value>-12.0 and position_value< -7.5 if direction>0 else position_value<12.0 and position_value>7.5
@@ -1105,7 +1120,6 @@ func _update_traffic(delta: float) -> void:
 		elif direction<0 and position_value< -108.0:
 			position_value = 108.0
 		car_data["position"] = position_value
-		var car: Node3D = car_data["root"]
 		if car_data["axis"]=="x":
 			car.position = Vector3(position_value,0,float(car_data["lane"]))
 		else:
@@ -1161,23 +1175,186 @@ func _add_windows(parent: Node3D, width: float, height: float, depth: float) -> 
 				window.material_override = glass
 				parent.add_child(window)
 
+func _create_roundabout() -> void:
+	var plaza := StaticBody3D.new()
+	plaza.name = "CentralRoundabout"
+	add_child(plaza)
+	var asphalt_disc := MeshInstance3D.new()
+	asphalt_disc.name = "RoundaboutPavedApron"
+	var disc := CylinderMesh.new()
+	disc.top_radius = 11.7
+	disc.bottom_radius = 11.7
+	disc.height = 0.12
+	disc.radial_segments = 96
+	asphalt_disc.mesh = disc
+	asphalt_disc.position.y = 0.055
+	asphalt_disc.material_override = asphalt_material
+	plaza.add_child(asphalt_disc)
+
+	var ring := MeshInstance3D.new()
+	ring.name = "CircularDrivingLane"
+	var surface := SurfaceTool.new()
+	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(96):
+		var a0 := TAU * float(i) / 96.0
+		var a1 := TAU * float(i + 1) / 96.0
+		var i0 := Vector3(cos(a0) * 7.15, 0.135, sin(a0) * 7.15)
+		var i1 := Vector3(cos(a1) * 7.15, 0.135, sin(a1) * 7.15)
+		var o0 := Vector3(cos(a0) * 10.25, 0.135, sin(a0) * 10.25)
+		var o1 := Vector3(cos(a1) * 10.25, 0.135, sin(a1) * 10.25)
+		surface.add_vertex(i0)
+		surface.add_vertex(o0)
+		surface.add_vertex(i1)
+		surface.add_vertex(i1)
+		surface.add_vertex(o0)
+		surface.add_vertex(o1)
+	surface.generate_normals()
+	ring.mesh = surface.commit()
+	ring.material_override = _mat(Color(0.19, 0.21, 0.22), 0.88)
+	plaza.add_child(ring)
+
+	var island := MeshInstance3D.new()
+	island.name = "LandscapedCenterIsland"
+	var island_mesh := CylinderMesh.new()
+	island_mesh.top_radius = 6.85
+	island_mesh.bottom_radius = 6.85
+	island_mesh.height = 0.34
+	island_mesh.radial_segments = 96
+	island.mesh = island_mesh
+	island.position.y = 0.17
+	island.material_override = stone_material
+	plaza.add_child(island)
+	var island_collision := CollisionShape3D.new()
+	var island_shape := CylinderShape3D.new()
+	island_shape.radius = 6.85
+	island_shape.height = 0.36
+	island_collision.shape = island_shape
+	island_collision.position.y = 0.17
+	plaza.add_child(island_collision)
+
+	var lawn := MeshInstance3D.new()
+	lawn.name = "RoundaboutGarden"
+	var lawn_mesh := CylinderMesh.new()
+	lawn_mesh.top_radius = 5.95
+	lawn_mesh.bottom_radius = 5.95
+	lawn_mesh.height = 0.10
+	lawn_mesh.radial_segments = 96
+	lawn.mesh = lawn_mesh
+	lawn.position.y = 0.39
+	lawn.material_override = _mat(Color(0.20, 0.38, 0.22), 0.98)
+	plaza.add_child(lawn)
+
+	var fountain_base := MeshInstance3D.new()
+	var fountain_mesh := CylinderMesh.new()
+	fountain_mesh.top_radius = 1.25
+	fountain_mesh.bottom_radius = 1.42
+	fountain_mesh.height = 0.42
+	fountain_base.mesh = fountain_mesh
+	fountain_base.position.y = 0.65
+	fountain_base.material_override = _mat(Color(0.48, 0.52, 0.53), 0.48)
+	plaza.add_child(fountain_base)
+	var water := MeshInstance3D.new()
+	var water_mesh := CylinderMesh.new()
+	water_mesh.top_radius = 1.05
+	water_mesh.bottom_radius = 1.05
+	water_mesh.height = 0.08
+	water.mesh = water_mesh
+	water.position.y = 0.90
+	water.material_override = _glow_material(Color(0.035, 0.36, 0.52))
+	plaza.add_child(water)
+	var spire := MeshInstance3D.new()
+	var spire_mesh := CylinderMesh.new()
+	spire_mesh.top_radius = 0.12
+	spire_mesh.bottom_radius = 0.27
+	spire_mesh.height = 1.25
+	spire.mesh = spire_mesh
+	spire.position.y = 1.38
+	spire.material_override = _mat(Color(0.68, 0.72, 0.72), 0.3)
+	plaza.add_child(spire)
+
+
+func _create_pedestrian_overpasses() -> void:
+	var deck_mat := _mat(Color(0.22, 0.29, 0.34), 0.48)
+	var rail_mat := _mat(Color(0.10, 0.17, 0.21), 0.38)
+	var light_mat := _glow_material(Color(0.04, 0.58, 0.78))
+	_create_overpass("NorthOverpass", Vector3(0, 0, -40), "z", deck_mat, rail_mat, light_mat)
+	_create_overpass("EastOverpass", Vector3(40, 0, 0), "x", deck_mat, rail_mat, light_mat)
+
+
+func _create_overpass(label: String, center: Vector3, axis: String, deck_mat: Material, rail_mat: Material, light_mat: Material) -> void:
+	var bridge := Node3D.new()
+	bridge.name = label
+	bridge.position = center
+	add_child(bridge)
+	var deck_body := StaticBody3D.new()
+	bridge.add_child(deck_body)
+	var deck := MeshInstance3D.new()
+	var deck_box := BoxMesh.new()
+	deck_box.size = Vector3(19.0, 0.34, 2.8) if axis == "z" else Vector3(2.8, 0.34, 19.0)
+	deck.mesh = deck_box
+	deck.position.y = 4.45
+	deck.material_override = deck_mat
+	deck_body.add_child(deck)
+	var deck_collision := CollisionShape3D.new()
+	var deck_shape := BoxShape3D.new()
+	deck_shape.size = deck_box.size
+	deck_collision.shape = deck_shape
+	deck_collision.position = deck.position
+	deck_body.add_child(deck_collision)
+	for side in [-1.0, 1.0]:
+		var rail := MeshInstance3D.new()
+		var rail_box := BoxMesh.new()
+		rail_box.size = Vector3(19.0, 0.16, 0.16) if axis == "z" else Vector3(0.16, 0.16, 19.0)
+		rail.mesh = rail_box
+		rail.position = Vector3(0, 5.25, side * 1.28) if axis == "z" else Vector3(side * 1.28, 5.25, 0)
+		rail.material_override = rail_mat
+		bridge.add_child(rail)
+		var glow := MeshInstance3D.new()
+		var glow_box := BoxMesh.new()
+		glow_box.size = Vector3(18.6, 0.035, 0.035) if axis == "z" else Vector3(0.035, 0.035, 18.6)
+		glow.mesh = glow_box
+		glow.position = rail.position + Vector3(0, -0.35, 0)
+		glow.material_override = light_mat
+		bridge.add_child(glow)
+	for side in [-1.0, 1.0]:
+		_add_overpass_stairs(bridge, axis, side, deck_mat, rail_mat)
+
+
+func _add_overpass_stairs(bridge: Node3D, axis: String, side: float, step_mat: Material, rail_mat: Material) -> void:
+	var rise := 0.42
+	var run := 0.68
+	for i in range(10):
+		var top := 4.45 - float(i + 1) * rise
+		var body := StaticBody3D.new()
+		var mesh := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(3.4, rise, run) if axis == "z" else Vector3(run, rise, 3.4)
+		mesh.mesh = box
+		body.position = Vector3(0, top - rise * 0.5, side * (1.7 + (float(i) + 0.5) * run)) if axis == "z" else Vector3(side * (1.7 + (float(i) + 0.5) * run), top - rise * 0.5, 0)
+		mesh.material_override = step_mat
+		body.add_child(mesh)
+		var collision := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = box.size
+		collision.shape = shape
+		body.add_child(collision)
+		bridge.add_child(body)
+	for rail_side in [-1.0, 1.0]:
+		var rail := MeshInstance3D.new()
+		var box := BoxMesh.new()
+		box.size = Vector3(0.14, 0.14, 7.8) if axis == "z" else Vector3(7.8, 0.14, 0.14)
+		rail.mesh = box
+		rail.position = Vector3(rail_side * 1.78, 2.45, side * 5.05) if axis == "z" else Vector3(side * 5.05, 2.45, rail_side * 1.78)
+		if axis == "z":
+			rail.rotation.x = side * atan(4.2 / 6.8)
+		else:
+			rail.rotation.z = -side * atan(4.2 / 6.8)
+		rail.material_override = rail_mat
+		bridge.add_child(rail)
+
+
 func _create_landmarks() -> void:
-	var plaza_body := StaticBody3D.new()
-	plaza_body.name = "CentralPlaza"
-	var plaza := MeshInstance3D.new()
-	var plaza_mesh := BoxMesh.new()
-	plaza_mesh.size = Vector3(25, 0.09, 25)
-	plaza.mesh = plaza_mesh
-	plaza.position = Vector3(0, 0.045, 0)
-	plaza.material_override = stone_material
-	plaza_body.add_child(plaza)
-	var plaza_collision := CollisionShape3D.new()
-	var plaza_shape := BoxShape3D.new()
-	plaza_shape.size = plaza_mesh.size
-	plaza_collision.shape = plaza_shape
-	plaza_collision.position.y = 0.045
-	plaza_body.add_child(plaza_collision)
-	add_child(plaza_body)
+	_create_roundabout()
 	var tower := StaticBody3D.new()
 	tower.name = "OldClockTower"
 	tower.position = Vector3(0, 9, -24)
@@ -1369,22 +1546,49 @@ func _create_police_officer() -> void:
 
 func _spawn_service(title: String, info: String, kind: String, pos: Vector3, tint: Color) -> void:
 	var item := StaticBody3D.new()
+	item.name = "ServiceKiosk_" + kind
 	item.set_script(INTERACTABLE_SCRIPT)
 	item.set("display_name", title)
 	item.set("description", info)
 	item.set("interaction_type", kind)
 	item.position = pos
 	add_child(item)
-	var mesh := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(1.2, 1.8, 0.5)
-	mesh.mesh = box
-	mesh.material_override = _mat(tint, 0.42)
-	item.add_child(mesh)
+	var base := MeshInstance3D.new()
+	var base_mesh := CylinderMesh.new()
+	base_mesh.top_radius = 0.48
+	base_mesh.bottom_radius = 0.56
+	base_mesh.height = 0.20
+	base.mesh = base_mesh
+	base.position.y = -0.68
+	base.material_override = _mat(Color(0.16, 0.20, 0.23), 0.48)
+	item.add_child(base)
+	var panel := MeshInstance3D.new()
+	panel.name = "KioskBody"
+	var panel_mesh := BoxMesh.new()
+	panel_mesh.size = Vector3(0.82, 1.22, 0.18)
+	panel.mesh = panel_mesh
+	panel.position.y = 0.02
+	panel.material_override = _mat(tint.lerp(Color(0.12, 0.16, 0.19), 0.62), 0.48)
+	item.add_child(panel)
+	var screen := MeshInstance3D.new()
+	var screen_mesh := BoxMesh.new()
+	screen_mesh.size = Vector3(0.60, 0.42, 0.035)
+	screen.mesh = screen_mesh
+	screen.position = Vector3(0, 0.20, -0.11)
+	screen.material_override = _glow_material(tint.lerp(Color(0.28, 0.58, 0.72), 0.35))
+	item.add_child(screen)
+	var strip := MeshInstance3D.new()
+	var strip_mesh := BoxMesh.new()
+	strip_mesh.size = Vector3(0.62, 0.055, 0.04)
+	strip.mesh = strip_mesh
+	strip.position = Vector3(0, -0.30, -0.12)
+	strip.material_override = _mat(tint.lerp(Color(0.22, 0.26, 0.28), 0.48), 0.38)
+	item.add_child(strip)
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
-	shape.size = Vector3(1.2, 1.8, 0.5)
+	shape.size = Vector3(0.92, 1.62, 0.70)
 	collision.shape = shape
+	collision.position.y = -0.02
 	item.add_child(collision)
 
 func _create_player() -> void:
