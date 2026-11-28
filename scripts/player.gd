@@ -600,14 +600,25 @@ func _build_touch_controls() -> void:
 	touch_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	touch_root.mouse_filter = Control.MOUSE_FILTER_PASS
 	layer.add_child(touch_root)
-	var defaults := {
-		"move_forward": Vector2(0.09, 0.70), "move_left": Vector2(0.025, 0.82),
-		"move_back": Vector2(0.09, 0.82), "move_right": Vector2(0.155, 0.82),
-		"jump": Vector2(0.84, 0.69), "crouch": Vector2(0.84, 0.81),
-		"sprint": Vector2(0.73, 0.81), "interact": Vector2(0.91, 0.81),
-		"camera_toggle": Vector2(0.73, 0.92), "inventory_toggle": Vector2(0.84, 0.92),
-		"menu": Vector2(0.91, 0.92)
-	}
+	var defaults := {}
+	if touch_layout_left:
+		defaults = {
+			"move_forward": Vector2(0.09, 0.70), "move_left": Vector2(0.025, 0.82),
+			"move_back": Vector2(0.09, 0.82), "move_right": Vector2(0.155, 0.82),
+			"jump": Vector2(0.84, 0.69), "crouch": Vector2(0.84, 0.81),
+			"sprint": Vector2(0.73, 0.81), "interact": Vector2(0.91, 0.81),
+			"camera_toggle": Vector2(0.73, 0.92), "inventory_toggle": Vector2(0.84, 0.92),
+			"menu": Vector2(0.91, 0.92)
+		}
+	else:
+		defaults = {
+			"move_forward": Vector2(0.91, 0.70), "move_left": Vector2(0.845, 0.82),
+			"move_back": Vector2(0.91, 0.82), "move_right": Vector2(0.975, 0.82),
+			"jump": Vector2(0.16, 0.69), "crouch": Vector2(0.16, 0.81),
+			"sprint": Vector2(0.27, 0.81), "interact": Vector2(0.09, 0.81),
+			"camera_toggle": Vector2(0.27, 0.92), "inventory_toggle": Vector2(0.16, 0.92),
+			"menu": Vector2(0.09, 0.92)
+		}
 	for action in defaults:
 		if not touch_button_positions.has(action):
 			touch_button_positions[action] = defaults[action]
@@ -621,6 +632,7 @@ func _build_touch_controls() -> void:
 		button.name = "Touch_" + action
 		button.text = captions[action]
 		button.custom_minimum_size = Vector2(70, 54) * touch_button_scale
+		button.size = button.custom_minimum_size
 		button.focus_mode = Control.FOCUS_NONE
 		button.mouse_filter = Control.MOUSE_FILTER_STOP
 		button.modulate = Color(0.72, 0.9, 1.0, 0.82)
@@ -658,8 +670,11 @@ func _position_touch_buttons() -> void:
 	for action in touch_buttons:
 		var button: Button = touch_buttons[action]
 		var normalized: Vector2 = touch_button_positions.get(action, Vector2(0.5, 0.5))
-		button.position = Vector2(normalized.x * touch_root.size.x, normalized.y * touch_root.size.y)
 		button.custom_minimum_size = Vector2(70, 54) * touch_button_scale
+		button.size = button.custom_minimum_size
+		var max_x := maxf(0.0, touch_root.size.x - button.size.x)
+		var max_y := maxf(0.0, touch_root.size.y - button.size.y)
+		button.position = Vector2(normalized.x * max_x, normalized.y * max_y)
 
 func _on_touch_action_down(action: String) -> void:
 	if touch_edit_mode:
@@ -820,6 +835,7 @@ func _build_pause_and_settings() -> void:
 	layout.select(0 if touch_layout_left else 1)
 	layout.item_selected.connect(func(index: int):
 		touch_layout_left = index == 0
+		touch_button_positions.clear()
 		_rebuild_touch_controls()
 		_save_player_settings()
 	)
@@ -907,11 +923,13 @@ func _apply_touch_button_scale() -> void:
 	for button in get_tree().get_nodes_in_group("touch_game_buttons"):
 		if button is Button:
 			button.custom_minimum_size = Vector2(70, 54) * touch_button_scale
+			button.size = button.custom_minimum_size
 	_position_touch_buttons()
 
 func _rebuild_touch_controls() -> void:
 	var old := get_node_or_null("MobileControls")
 	if old:
+		remove_child(old)
 		old.queue_free()
 	touch_buttons.clear()
 	touch_root = null
