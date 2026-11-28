@@ -21,6 +21,16 @@ var traffic_dim_materials: Array[StandardMaterial3D] = []
 var menu_root: Control
 var loading_label: Label
 var loading_bar: ProgressBar
+var skin_preview_container: SubViewportContainer
+var skin_preview_root: Node3D
+var skin_preview_model: Node3D
+var skin_preview_limbs: Array[Node3D] = []
+var skin_preview_parts: Dictionary = {}
+var skin_preview_time := 0.0
+var skin_preview_dragging := false
+var skin_studio_panel: PanelContainer
+var skin_name_input: LineEdit
+var skin_details_label: Label
 
 func _ready() -> void:
 	_create_startup_screen()
@@ -90,6 +100,7 @@ func _process(delta: float) -> void:
 		var hour := int(day_clock * 24.0)
 		clock_label.text = "WORLD TIME  %02d:%02d" % [hour, int(fposmod(day_clock * 1440.0, 60.0))]
 	_update_traffic(delta)
+	_animate_skin_preview(delta)
 
 func _create_surface_materials() -> void:
 	terrain_material = _mat(Color(0.36, 0.45, 0.31), 0.98)
@@ -382,6 +393,356 @@ func _show_main_menu() -> void:
 	footer.add_theme_font_size_override("font_size",11)
 	footer.add_theme_color_override("font_color",Color(0.48,0.65,0.78))
 	buttons.add_child(footer)
+	_add_menu_button(buttons, "✦   SKIN STUDIO", _open_skin_studio)
+	_create_skin_preview()
+
+
+func _skin_palettes() -> Array:
+	return [
+		{"name":"SHADOW RUNNER","detail":"MIDNIGHT ARMOR  •  CYAN ENERGY","dark":Color(0.035,0.045,0.065),"accent":Color(0.0,0.78,1.0),"skin":Color(0.92,0.78,0.62)},
+		{"name":"INFERNO","detail":"EMBER CORE  •  CRIMSON GLOW","dark":Color(0.12,0.035,0.025),"accent":Color(1.0,0.24,0.055),"skin":Color(0.78,0.57,0.42)},
+		{"name":"TOXIC GHOST","detail":"DARK CAMO  •  NEON LIME","dark":Color(0.045,0.075,0.045),"accent":Color(0.48,0.95,0.23),"skin":Color(0.84,0.68,0.52)},
+		{"name":"VOID REAPER","detail":"ABYSS SUIT  •  VIOLET PLASMA","dark":Color(0.035,0.025,0.075),"accent":Color(0.72,0.25,1.0),"skin":Color(0.72,0.63,0.57)}
+	]
+
+
+func _create_skin_preview() -> void:
+	var card := PanelContainer.new()
+	card.name = "SkinPreviewCard"
+	card.anchor_left = 0.55
+	card.anchor_top = 0.105
+	card.anchor_right = 0.985
+	card.anchor_bottom = 0.94
+	card.offset_left = 0
+	card.offset_top = 0
+	card.offset_right = 0
+	card.offset_bottom = 0
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.012,0.026,0.052,0.76)
+	style.border_color = Color(0.08,0.68,0.94,0.8)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(22)
+	card.add_theme_stylebox_override("panel",style)
+	menu_root.add_child(card)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation",5)
+	card.add_child(column)
+	var title := Label.new()
+	title.text = "3D CHARACTER PREVIEW"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size",18)
+	title.add_theme_color_override("font_color",Color(0.38,0.86,1.0))
+	column.add_child(title)
+	skin_preview_container = SubViewportContainer.new()
+	skin_preview_container.name = "SkinPreview3D"
+	skin_preview_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	skin_preview_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	skin_preview_container.custom_minimum_size = Vector2(420,440)
+	skin_preview_container.stretch = true
+	skin_preview_container.mouse_filter = Control.MOUSE_FILTER_STOP
+	skin_preview_container.gui_input.connect(_on_skin_preview_gui_input)
+	column.add_child(skin_preview_container)
+	var viewport := SubViewport.new()
+	viewport.size = Vector2i(600,620)
+	viewport.transparent_bg = true
+	viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	skin_preview_container.add_child(viewport)
+	var preview_world := World3D.new()
+	viewport.world_3d = preview_world
+	var camera := Camera3D.new()
+	camera.position = Vector3(0,1.45,5.4)
+	camera.fov = 38
+	camera.look_at(Vector3(0,1.05,0),Vector3.UP)
+	viewport.add_child(camera)
+	var key_light := DirectionalLight3D.new()
+	key_light.rotation_degrees = Vector3(-32,-28,0)
+	key_light.light_energy = 1.55
+	key_light.shadow_enabled = true
+	viewport.add_child(key_light)
+	var rim_light := OmniLight3D.new()
+	rim_light.position = Vector3(-2.1,2.2,-1.5)
+	rim_light.light_color = Color(0.08,0.55,1.0)
+	rim_light.light_energy = 2.0
+	rim_light.omni_range = 7.0
+	viewport.add_child(rim_light)
+	var warm_light := OmniLight3D.new()
+	warm_light.position = Vector3(2.0,1.7,1.4)
+	warm_light.light_color = Color(1.0,0.28,0.08)
+	warm_light.light_energy = 1.1
+	warm_light.omni_range = 6.0
+	viewport.add_child(warm_light)
+	skin_preview_root = Node3D.new()
+	skin_preview_root.name = "PreviewTurntable"
+	viewport.add_child(skin_preview_root)
+	var pedestal := MeshInstance3D.new()
+	var pedestal_mesh := CylinderMesh.new()
+	pedestal_mesh.top_radius = 0.88
+	pedestal_mesh.bottom_radius = 1.02
+	pedestal_mesh.height = 0.18
+	pedestal.mesh = pedestal_mesh
+	pedestal.position.y = 0.08
+	var pedestal_mat := StandardMaterial3D.new()
+	pedestal_mat.albedo_color = Color(0.025,0.065,0.11)
+	pedestal_mat.metallic = 0.72
+	pedestal_mat.roughness = 0.24
+	pedestal.material_override = pedestal_mat
+	skin_preview_root.add_child(pedestal)
+	skin_preview_model = Node3D.new()
+	skin_preview_model.position.y = 0.18
+	skin_preview_root.add_child(skin_preview_model)
+	_build_skin_preview_model()
+	var hint := Label.new()
+	hint.text = "DRAG TO ROTATE  •  FULL 3D VIEW"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size",11)
+	hint.add_theme_color_override("font_color",Color(0.48,0.78,0.91))
+	column.add_child(hint)
+	_apply_skin_preview_palette()
+
+
+func _build_skin_preview_model() -> void:
+	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,3)]
+	var dark_mat := _skin_material(palette.dark,0.34)
+	var accent_mat := _skin_material(palette.accent,0.24)
+	var skin_mat := _skin_material(palette.skin,0.48)
+	var torso := _skin_mesh("PreviewTorso",CapsuleMesh.new(),Vector3(0,1.15,0),accent_mat)
+	(torso.mesh as CapsuleMesh).radius = 0.22
+	(torso.mesh as CapsuleMesh).height = 0.82
+	skin_preview_model.add_child(torso)
+	var head := _skin_mesh("PreviewHead",SphereMesh.new(),Vector3(0,1.82,0),skin_mat)
+	(head.mesh as SphereMesh).radius = 0.28
+	(head.mesh as SphereMesh).height = 0.56
+	skin_preview_model.add_child(head)
+	skin_preview_parts["Head"] = head
+	skin_preview_parts["Torso"] = torso
+	var visor := _skin_mesh("EnergyVisor",BoxMesh.new(),Vector3(0,1.88,-0.245),accent_mat)
+	(visor.mesh as BoxMesh).size = Vector3(0.39,0.085,0.055)
+	skin_preview_model.add_child(visor)
+	skin_preview_parts["Visor"] = visor
+	var hip := _skin_mesh("PreviewHip",CapsuleMesh.new(),Vector3(0,0.72,0),dark_mat)
+	(hip.mesh as CapsuleMesh).radius = 0.19
+	(hip.mesh as CapsuleMesh).height = 0.3
+	skin_preview_model.add_child(hip)
+	for side in [-1.0,1.0]:
+		var arm_pivot := Node3D.new()
+		arm_pivot.position = Vector3(side*0.28,1.43,0)
+		skin_preview_model.add_child(arm_pivot)
+		var arm := _skin_mesh("Arm",CapsuleMesh.new(),Vector3(0,-0.29,0),dark_mat)
+		(arm.mesh as CapsuleMesh).radius = 0.105
+		(arm.mesh as CapsuleMesh).height = 0.68
+		arm_pivot.add_child(arm)
+		skin_preview_limbs.append(arm_pivot)
+		var leg_pivot := Node3D.new()
+		leg_pivot.position = Vector3(side*0.12,0.66,0)
+		skin_preview_model.add_child(leg_pivot)
+		var leg := _skin_mesh("Leg",CapsuleMesh.new(),Vector3(0,-0.31,0),dark_mat)
+		(leg.mesh as CapsuleMesh).radius = 0.115
+		(leg.mesh as CapsuleMesh).height = 0.72
+		leg_pivot.add_child(leg)
+		var boot := _skin_mesh("Boot",BoxMesh.new(),Vector3(0,-0.65,-0.09),accent_mat)
+		(boot.mesh as BoxMesh).size = Vector3(0.23,0.14,0.36)
+		leg_pivot.add_child(boot)
+		skin_preview_limbs.append(leg_pivot)
+	var shoulder := _skin_mesh("ShoulderArmor",SphereMesh.new(),Vector3(0,1.48,0),accent_mat)
+	(shoulder.mesh as SphereMesh).radius = 0.34
+	(shoulder.mesh as SphereMesh).height = 0.2
+	shoulder.scale = Vector3(1.2,0.55,0.8)
+	skin_preview_model.add_child(shoulder)
+	var cape := _skin_mesh("PreviewCape",BoxMesh.new(),Vector3(0,1.12,0.19),dark_mat)
+	(cape.mesh as BoxMesh).size = Vector3(0.62,0.98,0.07)
+	cape.rotation.x = -0.12
+	skin_preview_model.add_child(cape)
+	skin_preview_parts["Cape"] = cape
+
+
+func _skin_mesh(label: String, mesh: Mesh, position_value: Vector3, material: Material) -> MeshInstance3D:
+	var node := MeshInstance3D.new()
+	node.name = label
+	node.mesh = mesh
+	node.position = position_value
+	node.material_override = material
+	return node
+
+
+func _skin_material(color: Color, roughness_value: float) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.roughness = roughness_value
+	material.metallic = 0.42
+	return material
+
+
+func _apply_skin_preview_palette() -> void:
+	if skin_preview_parts.is_empty():
+		return
+	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,3)]
+	for part_name in skin_preview_parts:
+		var node: MeshInstance3D = skin_preview_parts[part_name]
+		var tint: Color = palette.skin if part_name == "Head" else (palette.accent if part_name == "Torso" or part_name == "Visor" else palette.dark)
+		node.material_override = _skin_material(tint,0.3)
+
+
+func _animate_skin_preview(delta: float) -> void:
+	if skin_preview_model == null or not is_instance_valid(skin_preview_model):
+		return
+	skin_preview_time += delta
+	var pulse := sin(skin_preview_time*2.8)
+	skin_preview_model.position.y = 0.18 + sin(skin_preview_time*1.7)*0.045
+	skin_preview_model.rotation.y += delta*0.18
+	for i in range(skin_preview_limbs.size()):
+		var phase := skin_preview_time*2.0 + (PI if i%2 == 1 else 0.0)
+		if i < 2:
+			skin_preview_limbs[i].rotation.z = sin(phase)*0.16 + pulse*0.025
+		else:
+			skin_preview_limbs[i].rotation.x = sin(phase)*0.10
+	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,3)]
+	if skin_preview_parts.has("Visor"):
+		var visor: MeshInstance3D = skin_preview_parts["Visor"]
+		var material := visor.material_override as StandardMaterial3D
+		if material:
+			material.emission_enabled = true
+			material.emission = palette.accent
+			material.emission_energy_multiplier = 0.7 + absf(pulse)*1.4
+
+
+func _on_skin_preview_gui_input(event: InputEvent) -> void:
+	if event is InputEventScreenDrag:
+		skin_preview_root.rotation.y += event.relative.x*0.012
+	elif event is InputEventMouseButton:
+		skin_preview_dragging = event.button_index == MOUSE_BUTTON_LEFT and event.pressed
+	elif event is InputEventMouseMotion and skin_preview_dragging and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		skin_preview_root.rotation.y += event.relative.x*0.012
+
+
+func _open_skin_studio() -> void:
+	var old := menu_root.get_node_or_null("SkinStudioPanel")
+	if old:
+		old.queue_free()
+	var menu_center := menu_root.get_node_or_null("MainMenuCenter")
+	if menu_center:
+		menu_center.visible = false
+	var panel := PanelContainer.new()
+	panel.name = "SkinStudioPanel"
+	panel.anchor_left = 0.035
+	panel.anchor_top = 0.13
+	panel.anchor_right = 0.52
+	panel.anchor_bottom = 0.88
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.012,0.028,0.055,0.97)
+	style.border_color = Color(0.1,0.72,0.98,0.95)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(20)
+	style.content_margin_left = 22
+	style.content_margin_right = 22
+	style.content_margin_top = 18
+	style.content_margin_bottom = 18
+	panel.add_theme_stylebox_override("panel",style)
+	menu_root.add_child(panel)
+	skin_studio_panel = panel
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation",12)
+	panel.add_child(column)
+	var title := Label.new()
+	title.text = "✦  SHADOW SKIN LAB"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size",25)
+	title.add_theme_color_override("font_color",Color(0.3,0.85,1.0))
+	column.add_child(title)
+	var instruction := Label.new()
+	instruction.text = "CHOOSE YOUR 3D IDENTITY"
+	instruction.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	instruction.add_theme_font_size_override("font_size",13)
+	column.add_child(instruction)
+	var skin_row := HBoxContainer.new()
+	skin_row.add_theme_constant_override("separation",10)
+	column.add_child(skin_row)
+	var previous := Button.new()
+	previous.text = "◀"
+	previous.custom_minimum_size = Vector2(54,58)
+	previous.pressed.connect(func(): _change_preview_skin(-1))
+	skin_row.add_child(previous)
+	var info := VBoxContainer.new()
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	skin_row.add_child(info)
+	var skin_name := Label.new()
+	skin_name.name = "SelectedSkinName"
+	skin_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	skin_name.add_theme_font_size_override("font_size",19)
+	info.add_child(skin_name)
+	skin_details_label = Label.new()
+	skin_details_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	skin_details_label.add_theme_font_size_override("font_size",11)
+	skin_details_label.add_theme_color_override("font_color",Color(0.55,0.73,0.85))
+	info.add_child(skin_details_label)
+	var next := Button.new()
+	next.text = "▶"
+	next.custom_minimum_size = Vector2(54,58)
+	next.pressed.connect(func(): _change_preview_skin(1))
+	skin_row.add_child(next)
+	var name_title := Label.new()
+	name_title.text = "CHARACTER NAME"
+	column.add_child(name_title)
+	skin_name_input = LineEdit.new()
+	skin_name_input.placeholder_text = "Enter your character name"
+	skin_name_input.text = GameState.character_name
+	skin_name_input.max_length = 22
+	column.add_child(skin_name_input)
+	var animation_label := Label.new()
+	animation_label.text = "SPECIAL ANIMATION  •  SHADOW SURGE"
+	animation_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	animation_label.add_theme_color_override("font_color",Color(0.1,0.85,1.0))
+	column.add_child(animation_label)
+	var animation_info := Label.new()
+	animation_info.text = "A dramatic 3D idle loop with energy pulse, floating motion and moving armor."
+	animation_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	animation_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	animation_info.add_theme_font_size_override("font_size",12)
+	column.add_child(animation_info)
+	var save := Button.new()
+	save.text = "SAVE MY SKIN"
+	save.custom_minimum_size.y = 48
+	save.pressed.connect(func():
+		GameState.character_name = skin_name_input.text.strip_edges()
+		if GameState.character_name.is_empty():
+			GameState.character_name = "SHADOW RUNNER"
+		var players := get_tree().get_nodes_in_group("player")
+		if not players.is_empty():
+			players[0].apply_selected_skin()
+		SaveSystem.save_game()
+		_refresh_skin_name_display()
+	)
+	column.add_child(save)
+	var back := Button.new()
+	back.text = "BACK TO MAIN MENU"
+	back.custom_minimum_size.y = 42
+	back.pressed.connect(func():
+		panel.queue_free()
+		var main := menu_root.get_node_or_null("MainMenuCenter")
+		if main:
+			main.visible = true
+	)
+	column.add_child(back)
+	_refresh_skin_name_display()
+
+
+func _change_preview_skin(step: int) -> void:
+	GameState.character_skin = posmod(GameState.character_skin + step, _skin_palettes().size())
+	_apply_skin_preview_palette()
+	var players := get_tree().get_nodes_in_group("player")
+	if not players.is_empty():
+		players[0].apply_selected_skin()
+	_refresh_skin_name_display()
+
+
+func _refresh_skin_name_display() -> void:
+	if skin_studio_panel == null or not is_instance_valid(skin_studio_panel):
+		return
+	var name_label := skin_studio_panel.find_child("SelectedSkinName",true,false) as Label
+	var palette: Dictionary = _skin_palettes()[clampi(GameState.character_skin,0,3)]
+	if name_label:
+		name_label.text = str(palette.name)
+	if skin_details_label:
+		skin_details_label.text = str(palette.detail)
 
 
 func _add_menu_button(parent: Control, caption: String, callback: Callable) -> Button:
