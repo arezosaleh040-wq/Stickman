@@ -402,6 +402,16 @@ func _build_character() -> void:
 	_add_box("RightShoulderArmor", Vector3(0.245, 1.43, -0.015), Vector3(0.22, 0.15, 0.25), accent)
 	_add_box("WaistPlate", Vector3(0, 0.83, -0.15), Vector3(0.31, 0.13, 0.07), accent)
 	_add_box("BackUnit", Vector3(0, 1.28, 0.16), Vector3(0.27, 0.34, 0.18), dark)
+	_add_capsule("NeckSeal", Vector3(0, 1.49, 0), 0.13, 0.16, dark)
+	_add_local_box(body_head, "HelmetCrown", Vector3(0, 0.235, 0.005), Vector3(0.34, 0.085, 0.32), accent)
+	_add_local_box(body_head, "HelmetLeftPod", Vector3(-0.245, 0.015, 0.0), Vector3(0.075, 0.16, 0.18), accent)
+	_add_local_box(body_head, "HelmetRightPod", Vector3(0.245, 0.015, 0.0), Vector3(0.075, 0.16, 0.18), accent)
+	_add_local_box(body_torso, "ChestArmorPlate", Vector3(0, 0.06, -0.178), Vector3(0.34, 0.34, 0.075), accent)
+	_add_local_box(body_torso, "ChestLeftRib", Vector3(-0.205, 0.015, -0.105), Vector3(0.065, 0.22, 0.075), dark)
+	_add_local_box(body_torso, "ChestRightRib", Vector3(0.205, 0.015, -0.105), Vector3(0.065, 0.22, 0.075), dark)
+	_add_local_box(body_torso, "ChestLowerTrim", Vector3(0, -0.18, -0.145), Vector3(0.27, 0.055, 0.07), accent)
+	_add_local_box(body_hip, "LeftHipArmor", Vector3(-0.14, 0.015, -0.105), Vector3(0.12, 0.22, 0.08), accent)
+	_add_local_box(body_hip, "RightHipArmor", Vector3(0.14, 0.015, -0.105), Vector3(0.12, 0.22, 0.08), accent)
 	_build_cape()
 	apply_selected_skin()
 
@@ -426,7 +436,7 @@ func apply_selected_skin() -> void:
 		var mesh_node := node as MeshInstance3D
 		if mesh_node.name == "AnimatedFabric" or mesh_node.name == "CapeCollar":
 			continue
-		var accent_part := mesh_node.name in ["Torso", "Visor", "ChestCore", "LeftShoulderArmor", "RightShoulderArmor", "WaistPlate"] or mesh_node.name.ends_with("Shoe") or mesh_node.name.ends_with("KneePad") or mesh_node.name.ends_with("ElbowArmor")
+		var accent_part := mesh_node.name in ["Torso", "Visor", "ChestCore", "LeftShoulderArmor", "RightShoulderArmor", "WaistPlate", "HelmetCrown", "HelmetLeftPod", "HelmetRightPod", "ChestArmorPlate", "ChestLowerTrim", "LeftHipArmor", "RightHipArmor"] or mesh_node.name.ends_with("Shoe") or mesh_node.name.ends_with("KneePad") or mesh_node.name.ends_with("ElbowArmor") or mesh_node.name.ends_with("ForearmArmor") or mesh_node.name.ends_with("ShinGuard")
 		var material: StandardMaterial3D
 		if mesh_node.name == "Head":
 			material = _material(palette[2], 0.5)
@@ -532,6 +542,14 @@ func _add_limb(label: String, pos: Vector3, radius: float, length: float, mat: M
 		hand.position.y = -lower_length - 0.045
 		hand.material_override = mat
 		joint.add_child(hand)
+		var forearm_armor := MeshInstance3D.new()
+		forearm_armor.name = label + "ForearmArmor"
+		var forearm_box := BoxMesh.new()
+		forearm_box.size = Vector3(radius * 2.45, lower_length * 0.34, radius * 0.62)
+		forearm_armor.mesh = forearm_box
+		forearm_armor.position = Vector3(0, -lower_length * 0.53, -radius * 0.72)
+		forearm_armor.material_override = mat
+		joint.add_child(forearm_armor)
 		arm_pivots.append(pivot)
 		arm_elbows.append(joint)
 	else:
@@ -564,6 +582,14 @@ func _add_limb(label: String, pos: Vector3, radius: float, length: float, mat: M
 		sole.position = Vector3(0, -0.075, -0.105)
 		sole.material_override = _material(Color(0.018, 0.022, 0.03), 0.62)
 		foot.add_child(sole)
+		var shin_guard := MeshInstance3D.new()
+		shin_guard.name = label + "ShinGuard"
+		var shin_box := BoxMesh.new()
+		shin_box.size = Vector3(radius * 2.05, lower_length * 0.42, radius * 0.58)
+		shin_guard.mesh = shin_box
+		shin_guard.position = Vector3(0, -lower_length * 0.52, -radius * 0.72)
+		shin_guard.material_override = mat
+		joint.add_child(shin_guard)
 		leg_pivots.append(pivot)
 		leg_knees.append(joint)
 		leg_feet.append(foot)
@@ -577,6 +603,16 @@ func _add_box(label: String, pos: Vector3, size_value: Vector3, mat: Material) -
 	node.position = pos
 	node.material_override = mat
 	visual_root.add_child(node)
+
+func _add_local_box(parent: Node3D, label: String, pos: Vector3, size_value: Vector3, mat: Material) -> void:
+	var node := MeshInstance3D.new()
+	node.name = label
+	var mesh := BoxMesh.new()
+	mesh.size = size_value
+	node.mesh = mesh
+	node.position = pos
+	node.material_override = mat
+	parent.add_child(node)
 
 func _toggle_camera() -> void:
 	first_person = not first_person
